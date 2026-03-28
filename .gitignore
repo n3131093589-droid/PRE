@@ -1,0 +1,16 @@
+# dataset
+drugbank_test/DrugBank/
+twosides_test/twosides/
+HDN-DDI-main/
+
+# backup & saved model
+*.log
+*.pkl
+*.out
+log/
+
+# Python cache
+__pycache__/
+.vscode*
+*.pyc
+.idea/

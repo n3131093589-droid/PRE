@@ -21,7 +21,7 @@ import os
 
 def build_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--n_atom_feats', type=int, default=55, help='num of input features')
+    parser.add_argument('--n_atom_feats', type=int, default=66, help='num of input features')
     parser.add_argument('--n_atom_hid', type=int, default=128, help='num of hidden features')
     parser.add_argument('--rel_total', type=int, default=963, help='num of interaction types')
     parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
@@ -209,8 +209,8 @@ def main():
     if checkpoint_dir:
         os.makedirs(checkpoint_dir, exist_ok=True)
 
-    df_ddi_train = pd.read_csv(f'twosides_test/twosides/fold{args.fold}/train.csv')
-    df_ddi_test = pd.read_csv(f'twosides_test/twosides/fold{args.fold}/test.csv')
+    df_ddi_train = pd.read_csv(f'/cmy_project/code/hdn-main-ini/PRE-main/twosides_test/twosides/fold{args.fold}/train.csv')
+    df_ddi_test = pd.read_csv(f'/cmy_project/code/hdn-main-ini/PRE-main/twosides_test/twosides/fold{args.fold}/test.csv')
 
     train_tup = [(h, t, r, n) for h, t, r, n in zip(df_ddi_train['d1'], df_ddi_train['d2'], df_ddi_train['type'], df_ddi_train['Neg samples'])]
     train_tup, val_tup = split_train_valid(train_tup, 2, val_ratio=0.25)
@@ -226,7 +226,14 @@ def main():
     val_data_loader = DrugDataLoader(val_data, batch_size=batch_size * 3, num_workers=2)
     test_data_loader = DrugDataLoader(test_data, batch_size=batch_size * 3, num_workers=2)
 
-    model = models.HDN_DDI(n_atom_feats, n_atom_hid, kge_dim, rel_total, heads_out_feat_params=[64,64,64,64], blocks_params=[2, 2, 2, 2])
+    model = models.HDN_DDI(
+        in_features=66,
+        hidd_dim=n_atom_hid,
+        kge_dim=kge_dim,
+        rel_total=rel_total,
+        heads_out_feat_params=[64,64,64,64],
+        blocks_params=[2, 2, 2, 2]
+    )
     loss = custom_loss.SigmoidLoss()
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = optim.lr_scheduler.LambdaLR(optimizer, lambda epoch: 0.96 ** (epoch))

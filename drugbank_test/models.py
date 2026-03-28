@@ -131,10 +131,10 @@ class HDN_DDI_Block(nn.Module):
         h_intraRep = self.intraAtt(h_data)
         t_intraRep = self.intraAtt(t_data)
         
-        h_interRep,t_interRep = self.interAtt(h_data,t_data,b_graph)
+        h_x_inter,h_y_inter = self.interAtt(h_data,t_data,b_graph)
         
-        h_rep = torch.cat([h_intraRep,h_interRep],1)
-        t_rep = torch.cat([t_intraRep,t_interRep],1)
+        h_rep = torch.cat([h_intraRep,h_x_inter],1)
+        t_rep = torch.cat([t_intraRep,h_y_inter],1)
         h_data.x = F.elu(self.norm(h_rep, h_data.batch))
         t_data.x = F.elu(self.norm(t_rep, t_data.batch))
 

@@ -106,9 +106,12 @@ def get_mol_edge_list_and_feat_mtx(mol_graph):
     n_features = torch.stack(n_features)
 
     edge_list = torch.LongTensor([(b.GetBeginAtomIdx(), b.GetEndAtomIdx()) for b in mol_graph.GetBonds()])
-    undirected_edge_list = torch.cat([edge_list, edge_list[:, [1, 0]]], dim=0) if len(edge_list) else edge_list
-    
-    return undirected_edge_list.T, n_features
+    if len(edge_list):
+        undirected_edge_list = torch.cat([edge_list, edge_list[:, [1, 0]]], dim=0).T
+    else:
+        undirected_edge_list = torch.empty((2, 0), dtype=torch.long)
+
+    return undirected_edge_list, n_features
 
 
 def get_bipartite_graph(graph_data_1,graph_data_2):
@@ -182,10 +185,11 @@ class BipartiteData(Data):
 
 
 class DrugDataset(Dataset):
-    def __init__(self, tri_list,shuffle=True):
+    def __init__(self, tri_list, ratio=1.0, repeat_negatives=1, shuffle=True):
         ''''disjoint_split: Consider whether entities should appear in one and only one split of the dataset
         ''' 
         self.tri_list = []
+        self.repeat_negatives = max(1, int(repeat_negatives))
         
         for h, t, r, n in tri_list:
             if ((h in MOL_EDGE_LIST_FEAT_MTX) and (t in MOL_EDGE_LIST_FEAT_MTX) and (n in MOL_EDGE_LIST_FEAT_MTX)):
@@ -193,6 +197,9 @@ class DrugDataset(Dataset):
         
         if shuffle:
             random.shuffle(self.tri_list)
+
+        limit = math.ceil(len(self.tri_list) * ratio)
+        self.tri_list = self.tri_list[:limit]
       
        
     def __len__(self):
@@ -226,16 +233,14 @@ class DrugDataset(Dataset):
             pos_b_samples.append(pos_b_graph)
             pos_rels.append(r)
     
-            n_data = self.__create_graph_data(n)
-            n_graph = drug_to_mol_graph[n]
+            for _ in range(self.repeat_negatives):
+                n_data = self.__create_graph_data(n)
+                neg_b_graph = self._create_b_graph(get_bipartite_graph(h_data,n_data),h_data.x,n_data.x)
 
-            neg_b_graph = self._create_b_graph(get_bipartite_graph(h_data,n_data),h_data.x,n_data.x)
-
-
-            neg_h_samples.append(h_data)
-            neg_t_samples.append(n_data)
-            neg_b_samples.append(neg_b_graph)
-            neg_rels.append(r)
+                neg_h_samples.append(h_data)
+                neg_t_samples.append(n_data)
+                neg_b_samples.append(neg_b_graph)
+                neg_rels.append(r)
 
  
         pos_h_samples = Batch.from_data_list(pos_h_samples)

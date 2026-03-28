@@ -18,6 +18,27 @@ warnings.filterwarnings('ignore',category=UserWarning)
 import random
 import os
 
+
+def build_parser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--n_atom_feats', type=int, default=55, help='num of input features')
+    parser.add_argument('--n_atom_hid', type=int, default=128, help='num of hidden features')
+    parser.add_argument('--rel_total', type=int, default=963, help='num of interaction types')
+    parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
+    parser.add_argument('--n_epochs', type=int, default=200, help='num of epochs')
+    parser.add_argument('--kge_dim', type=int, default=128, help='dimension of interaction matrix')
+    parser.add_argument('--batch_size', type=int, default=1024, help='batch size')
+    parser.add_argument('--weight_decay', type=float, default=5e-4)
+    parser.add_argument('--neg_samples', type=int, default=1)
+    parser.add_argument('--data_size_ratio', type=float, default=1.0)
+    parser.add_argument('--use_cuda', action='store_true', help='enable CUDA if available')
+    parser.add_argument('--no_cuda', action='store_false', dest='use_cuda', help='disable CUDA')
+    parser.set_defaults(use_cuda=True)
+    parser.add_argument('--device', type=int, default=0, choices=[0, 1, 2])
+    parser.add_argument('--fold', type=int, default=0, choices=[0, 1, 2])
+    parser.add_argument('--pkl_name', type=str, default=f'./pkl/ts-{time.strftime("%m%d_%H%M")}.pkl')
+    return parser
+
 def seed_everything(seed=42):
     '''设置整个开发环境的seed'''
 
@@ -33,46 +54,6 @@ def seed_everything(seed=42):
 
 seed_everything(42)
 
-######################### Parameters ######################
-parser = argparse.ArgumentParser()
-parser.add_argument('--n_atom_feats', type=int, default=55, help='num of input features')
-parser.add_argument('--n_atom_hid', type=int, default=128, help='num of hidden features')
-parser.add_argument('--rel_total', type=int, default=963, help='num of interaction types')
-parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
-parser.add_argument('--n_epochs', type=int, default=200, help='num of epochs')
-parser.add_argument('--kge_dim', type=int, default=128, help='dimension of interaction matrix')
-parser.add_argument('--batch_size', type=int, default=1024, help='batch size')
-
-parser.add_argument('--weight_decay', type=float, default=5e-4)
-parser.add_argument('--neg_samples', type=int, default=1)
-parser.add_argument('--data_size_ratio', type=int, default=1)
-parser.add_argument('--use_cuda', action='store_true', help='enable CUDA if available')
-parser.add_argument('--no_cuda', action='store_false', dest='use_cuda', help='disable CUDA')
-parser.set_defaults(use_cuda=True)
-parser.add_argument('--device', type=int, default=0, choices=[0, 1, 2])
-parser.add_argument('--fold', type=int, default=0, choices=[0, 1, 2])
-parser.add_argument('--pkl_name', type=str, default=f'./pkl/ts-{time.strftime("%m%d_%H%M")}.pkl')
-
-args = parser.parse_args()
-n_atom_feats = args.n_atom_feats
-n_atom_hid = args.n_atom_hid
-rel_total = args.rel_total
-lr = args.lr
-n_epochs = args.n_epochs
-kge_dim = args.kge_dim
-batch_size = args.batch_size
-pkl_name = args.pkl_name.replace('.pkl', f'-fold{args.fold}.pkl')
-
-weight_decay = args.weight_decay
-neg_samples = args.neg_samples
-data_size_ratio = args.data_size_ratio
-use_cuda = torch.cuda.is_available() and args.use_cuda
-if use_cuda:
-    torch.cuda.set_device(args.device)
-device = f'cuda:{args.device}' if use_cuda else 'cpu'
-print(args)
-############################################################
-
 ###### Dataset
 def split_train_valid(data, fold, val_ratio=0.2):
     data = np.array(data)
@@ -83,24 +64,6 @@ def split_train_valid(data, fold, val_ratio=0.2):
     train_tup = [(tup[0],tup[1],int(tup[2]),tup[3])for tup in train_tup ]
     val_tup = [(tup[0],tup[1],int(tup[2]),tup[3])for tup in val_tup ]
     return train_tup, val_tup
-
-df_ddi_train = pd.read_csv(f'twosides_test/twosides/fold{args.fold}/train.csv')
-df_ddi_test = pd.read_csv(f'twosides_test/twosides/fold{args.fold}/test.csv')
-
-train_tup = [(h, t, r, n) for h, t, r, n in zip(df_ddi_train['d1'], df_ddi_train['d2'], df_ddi_train['type'], df_ddi_train['Neg samples'])]
-train_tup, val_tup = split_train_valid(train_tup,2, val_ratio=0.25)
-test_tup = [(h, t, r, n) for h, t, r, n in zip(df_ddi_test['d1'], df_ddi_test['d2'], df_ddi_test['type'], df_ddi_test['Neg samples'])]
-
-train_data = DrugDataset(train_tup)
-val_data = DrugDataset(val_tup)
-test_data = DrugDataset(test_tup)
-
-
-print(f"Training with {len(train_data)} samples, validating with {len(val_data)}, and testing with {len(test_data)}")
-
-train_data_loader = DrugDataLoader(train_data, batch_size=batch_size, shuffle=True,num_workers=2)
-val_data_loader = DrugDataLoader(val_data, batch_size=batch_size *3,num_workers=2)
-test_data_loader = DrugDataLoader(test_data, batch_size=batch_size *3,num_workers=2)
 
 
 def do_compute(batch, device, model):
@@ -141,7 +104,7 @@ def do_compute_metrics(probas_pred, target):
     return acc, auroc, f1_score, precision, recall, int_ap, ap
 
 
-def train(model, train_data_loader, val_data_loader, loss_fn,  optimizer, n_epochs, device, scheduler=None):
+def train(model, train_data_loader, val_data_loader, loss_fn, optimizer, n_epochs, device, train_size, val_size, checkpoint_path, scheduler=None):
     best_mean_metrics, best_epoch = 0, 0
     print('Starting training at', datetime.today())
     for i in range(1, n_epochs+1):
@@ -166,7 +129,7 @@ def train(model, train_data_loader, val_data_loader, loss_fn,  optimizer, n_epoc
             optimizer.step()
            
             train_loss += loss.item() * len(p_score)
-        train_loss /= len(train_data)
+        train_loss /= train_size
 
         with torch.no_grad():
             train_probas_pred = np.concatenate(train_probas_pred)
@@ -182,14 +145,14 @@ def train(model, train_data_loader, val_data_loader, loss_fn,  optimizer, n_epoc
                 loss, loss_p, loss_n = loss_fn(p_score, n_score)
                 val_loss += loss.item() * len(p_score)            
 
-            val_loss /= len(val_data)
+            val_loss /= val_size
             val_probas_pred = np.concatenate(val_probas_pred)
             val_ground_truth = np.concatenate(val_ground_truth)
             val_acc, val_auc_roc, val_f1, val_precision,val_recall,val_int_ap, val_ap = do_compute_metrics(val_probas_pred, val_ground_truth)
             mean_metrics = np.average([val_acc, val_auc_roc, val_f1])
             if mean_metrics>best_mean_metrics:
                 best_mean_metrics, best_epoch = mean_metrics, i
-                torch.save(model,pkl_name)
+                torch.save(model, checkpoint_path)
 
         if scheduler:
             # print('scheduling')
@@ -205,7 +168,7 @@ def train(model, train_data_loader, val_data_loader, loss_fn,  optimizer, n_epoc
             print(f'Early Stopping at training epoch: {i}, best epoch: {best_epoch}')
             break
 
-def test(test_data_loader,model):
+def test(test_data_loader, model, device):
     test_probas_pred = []
     test_ground_truth = []
     with torch.no_grad():
@@ -221,13 +184,59 @@ def test(test_data_loader,model):
     print('============================== Test Result ==============================')
     print(f'\t\ttest_acc: {test_acc:.4f}, test_roc: {test_auc_roc:.4f}, test_f1: {test_f1:.4f}, test_precision: {test_precision:.4f},test_recall: {test_recall:.4f},test_int_ap: {test_int_ap:.4f},test_ap: {test_ap:.4f}')
 
-model = models.HDN_DDI(n_atom_feats, n_atom_hid, kge_dim, rel_total, heads_out_feat_params=[64,64,64,64], blocks_params=[2, 2, 2, 2])
-loss = custom_loss.SigmoidLoss()
-optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
-scheduler = optim.lr_scheduler.LambdaLR(optimizer, lambda epoch: 0.96 ** (epoch))
-model.to(device=device)
 
-train(model, train_data_loader, val_data_loader, loss, optimizer, n_epochs, device, scheduler)
-test_model = torch.load(pkl_name, map_location=device)
-test(test_data_loader,test_model)
+def main():
+    args = build_parser().parse_args()
+    n_atom_feats = args.n_atom_feats
+    n_atom_hid = args.n_atom_hid
+    rel_total = args.rel_total
+    lr = args.lr
+    n_epochs = args.n_epochs
+    kge_dim = args.kge_dim
+    batch_size = args.batch_size
+    pkl_name = args.pkl_name.replace('.pkl', f'-fold{args.fold}.pkl')
+
+    weight_decay = args.weight_decay
+    neg_samples = args.neg_samples
+    data_size_ratio = args.data_size_ratio
+    use_cuda = torch.cuda.is_available() and args.use_cuda
+    if use_cuda:
+        torch.cuda.set_device(args.device)
+    device = f'cuda:{args.device}' if use_cuda else 'cpu'
+    print(args)
+
+    checkpoint_dir = os.path.dirname(pkl_name)
+    if checkpoint_dir:
+        os.makedirs(checkpoint_dir, exist_ok=True)
+
+    df_ddi_train = pd.read_csv(f'twosides_test/twosides/fold{args.fold}/train.csv')
+    df_ddi_test = pd.read_csv(f'twosides_test/twosides/fold{args.fold}/test.csv')
+
+    train_tup = [(h, t, r, n) for h, t, r, n in zip(df_ddi_train['d1'], df_ddi_train['d2'], df_ddi_train['type'], df_ddi_train['Neg samples'])]
+    train_tup, val_tup = split_train_valid(train_tup, 2, val_ratio=0.25)
+    test_tup = [(h, t, r, n) for h, t, r, n in zip(df_ddi_test['d1'], df_ddi_test['d2'], df_ddi_test['type'], df_ddi_test['Neg samples'])]
+
+    train_data = DrugDataset(train_tup, ratio=data_size_ratio, repeat_negatives=neg_samples)
+    val_data = DrugDataset(val_tup, ratio=data_size_ratio)
+    test_data = DrugDataset(test_tup)
+
+    print(f"Training with {len(train_data)} samples, validating with {len(val_data)}, and testing with {len(test_data)}")
+
+    train_data_loader = DrugDataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=2)
+    val_data_loader = DrugDataLoader(val_data, batch_size=batch_size * 3, num_workers=2)
+    test_data_loader = DrugDataLoader(test_data, batch_size=batch_size * 3, num_workers=2)
+
+    model = models.HDN_DDI(n_atom_feats, n_atom_hid, kge_dim, rel_total, heads_out_feat_params=[64,64,64,64], blocks_params=[2, 2, 2, 2])
+    loss = custom_loss.SigmoidLoss()
+    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    scheduler = optim.lr_scheduler.LambdaLR(optimizer, lambda epoch: 0.96 ** (epoch))
+    model.to(device=device)
+
+    train(model, train_data_loader, val_data_loader, loss, optimizer, n_epochs, device, len(train_data), len(val_data), pkl_name, scheduler)
+    test_model = torch.load(pkl_name, map_location=device)
+    test(test_data_loader, test_model, device)
+
+
+if __name__ == '__main__':
+    main()
 

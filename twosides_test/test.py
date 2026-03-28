@@ -12,6 +12,18 @@ warnings.filterwarnings('ignore',category=UserWarning)
 import random
 import os
 
+
+def build_parser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--use_cuda', action='store_true', help='enable CUDA if available')
+    parser.add_argument('--no_cuda', action='store_false', dest='use_cuda', help='disable CUDA')
+    parser.set_defaults(use_cuda=True)
+    parser.add_argument('--device', type=int, default=0, choices=[0, 1, 2])
+    parser.add_argument('--fold', type=int, required=True, choices=[0, 1, 2])
+    parser.add_argument('--pkl_name', type=str, required=True)
+    parser.add_argument('--batch_size', type=int, default=2048, help='batch size')
+    return parser
+
 def seed_everything(seed=42):
     '''设置整个开发环境的seed'''
 
@@ -27,25 +39,6 @@ def seed_everything(seed=42):
 
 seed_everything(42)
 
-######################### Parameters ######################
-parser = argparse.ArgumentParser()
-parser.add_argument('--use_cuda', action='store_true', help='enable CUDA if available')
-parser.add_argument('--no_cuda', action='store_false', dest='use_cuda', help='disable CUDA')
-parser.set_defaults(use_cuda=True)
-parser.add_argument('--device', type=int, default=0, choices=[0, 1, 2])
-parser.add_argument('--fold', type=int, required=True, choices=[0, 1, 2])
-parser.add_argument('--pkl_name', type=str, required=True)
-parser.add_argument('--batch_size', type=int, default=2048, help='batch size')
-
-args = parser.parse_args()
-batch_size = args.batch_size
-use_cuda = torch.cuda.is_available() and args.use_cuda
-if use_cuda:
-    torch.cuda.set_device(args.device)
-device = f'cuda:{args.device}' if use_cuda else 'cpu'
-print(args)
-############################################################
-
 ###### Dataset
 def split_train_valid(data, fold, val_ratio=0.2):
     data = np.array(data)
@@ -57,13 +50,6 @@ def split_train_valid(data, fold, val_ratio=0.2):
     val_tup = [(tup[0],tup[1],int(tup[2]),tup[3])for tup in val_tup ]
 
     return train_tup, val_tup
-
-df_ddi_test = pd.read_csv(f'twosides_test/twosides/fold{args.fold}/test.csv')
-test_tup = [(h, t, r, n) for h, t, r, n in zip(df_ddi_test['d1'], df_ddi_test['d2'], df_ddi_test['type'], df_ddi_test['Neg samples'])]
-test_data = DrugDataset(test_tup)
-
-print(f"Testing on fold {args.fold}, Samples'num: {len(test_data)}")
-test_data_loader = DrugDataLoader(test_data, batch_size=batch_size *3,num_workers=2)
 
 
 def do_compute(batch, device, model):
@@ -103,7 +89,7 @@ def do_compute_metrics(probas_pred, target):
 
     return acc, auroc, f1_score, precision, recall, int_ap, ap
 
-def test(test_data_loader,model):
+def test(test_data_loader, model, device):
     test_probas_pred = []
     test_ground_truth = []
     with torch.no_grad():
@@ -119,7 +105,28 @@ def test(test_data_loader,model):
     print('============================== Test Result ==============================')
     print(f'\t\ttest_acc: {test_acc:.4f}, test_roc: {test_auc_roc:.4f}, test_f1: {test_f1:.4f}, test_precision: {test_precision:.4f},test_recall: {test_recall:.4f},test_int_ap: {test_int_ap:.4f},test_ap: {test_ap:.4f}')
 
-test_model = torch.load(args.pkl_name, map_location=device).to(device)
-test(test_data_loader,test_model)
+
+def main():
+    args = build_parser().parse_args()
+    batch_size = args.batch_size
+    use_cuda = torch.cuda.is_available() and args.use_cuda
+    if use_cuda:
+        torch.cuda.set_device(args.device)
+    device = f'cuda:{args.device}' if use_cuda else 'cpu'
+    print(args)
+
+    df_ddi_test = pd.read_csv(f'twosides_test/twosides/fold{args.fold}/test.csv')
+    test_tup = [(h, t, r, n) for h, t, r, n in zip(df_ddi_test['d1'], df_ddi_test['d2'], df_ddi_test['type'], df_ddi_test['Neg samples'])]
+    test_data = DrugDataset(test_tup)
+
+    print(f"Testing on fold {args.fold}, Samples'num: {len(test_data)}")
+    test_data_loader = DrugDataLoader(test_data, batch_size=batch_size * 3, num_workers=2)
+
+    test_model = torch.load(args.pkl_name, map_location=device).to(device)
+    test(test_data_loader, test_model, device)
+
+
+if __name__ == '__main__':
+    main()
 
 

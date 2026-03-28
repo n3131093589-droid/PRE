@@ -106,7 +106,10 @@ def get_mol_edge_list_and_feat_mtx(mol_graph):
     n_features = torch.stack(n_features)
 
     edge_list = torch.LongTensor([(b.GetBeginAtomIdx(), b.GetEndAtomIdx()) for b in mol_graph.GetBonds()])
-    undirected_edge_list = torch.cat([edge_list, edge_list[:, [1, 0]]], dim=0).T if len(edge_list) else edge_list
+    if len(edge_list):
+        undirected_edge_list = torch.cat([edge_list, edge_list[:, [1, 0]]], dim=0).T
+    else:
+        undirected_edge_list = torch.empty((2, 0), dtype=torch.long)
     return undirected_edge_list, n_features
 
 def get_bipartite_graph(graph_data_1,graph_data_2):

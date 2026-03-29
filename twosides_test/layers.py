@@ -6,7 +6,6 @@ from torch import nn
 import torch.nn.functional as F
 
 from torch_geometric.nn import GCNConv,SAGPooling,global_add_pool,GATConv
-from torch_geometric.utils import softmax
 
 
 class CoAttentionLayer(nn.Module):
@@ -101,17 +100,8 @@ class InterGraphAttention(nn.Module):
         self.input_dim = input_dim
         self.heads = 2
         self.head_out_feats = 32
-        self.out_dim = self.heads * self.head_out_feats
         self.dropout = 0.3
-
-        self.local_inter = GATConv(input_dim, self.head_out_feats, self.heads, dropout=self.dropout)
-        self.node_key_proj = nn.Linear(input_dim, self.out_dim, bias=False)
-        self.node_value_proj = nn.Linear(input_dim, self.out_dim, bias=False)
-        self.virtual_query_proj = nn.Linear(input_dim, self.out_dim, bias=False)
-        self.virtual_residual_proj = nn.Linear(input_dim, self.out_dim, bias=False)
-        self.node_query_proj = nn.Linear(input_dim, self.out_dim, bias=False)
-        self.virtual_key_proj = nn.Linear(self.out_dim, self.out_dim, bias=False)
-        self.virtual_value_proj = nn.Linear(self.out_dim, self.out_dim, bias=False)
+        self.inter = GATConv(input_dim, self.head_out_feats, self.heads, dropout=self.dropout)
 
     def _segment_mean(self, node_feature, batch, n_graphs):
         pooled = node_feature.new_zeros((n_graphs, node_feature.size(-1)))
@@ -136,34 +126,12 @@ class InterGraphAttention(nn.Module):
         mol_counts.index_add_(0, mol_batch, node_feature.new_ones((mol_feature.size(0), 1)))
         return torch.where(mol_counts > 0, mol_mean, graph_mean)
 
-    def _compute_virtual_message(self, all_nodes, pair_ids, virtual_feature):
-        node_key = self.node_key_proj(all_nodes).view(-1, self.heads, self.head_out_feats)
-        node_value = self.node_value_proj(all_nodes).view(-1, self.heads, self.head_out_feats)
-        virtual_query = self.virtual_query_proj(virtual_feature).view(-1, self.heads, self.head_out_feats)
-
-        scores = (node_key * virtual_query[pair_ids]).sum(dim=-1) / math.sqrt(self.head_out_feats)
-        attention = softmax(scores, pair_ids)
-        attention = F.dropout(attention, p=self.dropout, training=self.training)
-
-        virtual_context = all_nodes.new_zeros((virtual_feature.size(0), self.heads, self.head_out_feats))
-        virtual_context.index_add_(0, pair_ids, node_value * attention.unsqueeze(-1))
-        virtual_state = self.virtual_residual_proj(virtual_feature).view(-1, self.heads, self.head_out_feats)
-        virtual_state = F.elu(virtual_state + virtual_context).reshape(-1, self.out_dim)
-
-        node_query = self.node_query_proj(all_nodes).view(-1, self.heads, self.head_out_feats)
-        virtual_key = self.virtual_key_proj(virtual_state).view(-1, self.heads, self.head_out_feats)
-        virtual_value = self.virtual_value_proj(virtual_state).view(-1, self.heads, self.head_out_feats)
-        gate = torch.sigmoid((node_query * virtual_key[pair_ids]).sum(dim=-1) / math.sqrt(self.head_out_feats))
-        gate = F.dropout(gate, p=self.dropout, training=self.training)
-        return (gate.unsqueeze(-1) * virtual_value[pair_ids]).reshape(-1, self.out_dim)
-    
     def forward(self,h_data,t_data,b_graph):
         h_input = F.elu(h_data.x)
         t_input = F.elu(t_data.x)
+        h_num_nodes = h_input.size(0)
+        t_num_nodes = t_input.size(0)
         n_graphs = int(torch.maximum(h_data.batch.max(), t_data.batch.max()).item()) + 1
-
-        h_local = self.local_inter(h_input, h_data.edge_index)
-        t_local = self.local_inter(t_input, t_data.edge_index)
 
         h_type = h_data.y if hasattr(h_data, 'y') else None
         t_type = t_data.y if hasattr(t_data, 'y') else None
@@ -171,14 +139,32 @@ class InterGraphAttention(nn.Module):
         t_virtual = self._get_virtual_node_feature(t_input, t_data.batch, t_type, n_graphs)
         virtual_feature = (h_virtual + t_virtual) / 2
 
-        all_nodes = torch.cat([h_input, t_input], dim=0)
-        pair_ids = torch.cat([h_data.batch, t_data.batch], dim=0)
-        virtual_message = self._compute_virtual_message(all_nodes, pair_ids, virtual_feature)
+        virtual_offset = h_num_nodes + t_num_nodes
+        virtual_indices = torch.arange(n_graphs, device=h_input.device) + virtual_offset
 
-        h_virtual_message = virtual_message[:h_input.size(0)]
-        t_virtual_message = virtual_message[h_input.size(0):]
-        h_x_inter = F.elu(h_local + h_virtual_message)
-        h_y_inter = F.elu(t_local + t_virtual_message)
+        h_node_indices = torch.arange(h_num_nodes, device=h_input.device)
+        t_node_indices = torch.arange(t_num_nodes, device=t_input.device) + h_num_nodes
+
+        h_virtual_edges = torch.stack([
+            torch.cat([h_node_indices, virtual_indices[h_data.batch]]),
+            torch.cat([virtual_indices[h_data.batch], h_node_indices]),
+        ], dim=0)
+        t_virtual_edges = torch.stack([
+            torch.cat([t_node_indices, virtual_indices[t_data.batch]]),
+            torch.cat([virtual_indices[t_data.batch], t_node_indices]),
+        ], dim=0)
+
+        fused_x = torch.cat([h_input, t_input, virtual_feature], dim=0)
+        fused_edge_index = torch.cat([
+            h_data.edge_index,
+            t_data.edge_index + h_num_nodes,
+            h_virtual_edges,
+            t_virtual_edges,
+        ], dim=1)
+        fused_rep = self.inter(fused_x, fused_edge_index)
+
+        h_x_inter = fused_rep[:h_num_nodes]
+        h_y_inter = fused_rep[h_num_nodes:virtual_offset]
         return h_x_inter,h_y_inter
 
 

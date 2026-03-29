@@ -104,7 +104,7 @@ class InterGraphAttention(nn.Module):
         self.out_dim = self.heads * self.head_out_feats
         self.dropout = 0.3
 
-        self.local_inter = GATConv(input_dim, self.head_out_feats, self.heads, dropout=self.dropout)
+        self.inter = GATConv((input_dim, input_dim), self.head_out_feats, self.heads, dropout=self.dropout)
         self.node_key_proj = nn.Linear(input_dim, self.out_dim, bias=False)
         self.node_value_proj = nn.Linear(input_dim, self.out_dim, bias=False)
         self.virtual_query_proj = nn.Linear(input_dim, self.out_dim, bias=False)
@@ -112,6 +112,10 @@ class InterGraphAttention(nn.Module):
         self.node_query_proj = nn.Linear(input_dim, self.out_dim, bias=False)
         self.virtual_key_proj = nn.Linear(self.out_dim, self.out_dim, bias=False)
         self.virtual_value_proj = nn.Linear(self.out_dim, self.out_dim, bias=False)
+        self.h_aux_gate = nn.Linear(self.out_dim * 2, self.out_dim)
+        self.t_aux_gate = nn.Linear(self.out_dim * 2, self.out_dim)
+        nn.init.constant_(self.h_aux_gate.bias, -2.0)
+        nn.init.constant_(self.t_aux_gate.bias, -2.0)
 
     def _segment_mean(self, node_feature, batch, n_graphs):
         pooled = node_feature.new_zeros((n_graphs, node_feature.size(-1)))
@@ -162,8 +166,9 @@ class InterGraphAttention(nn.Module):
         t_input = F.elu(t_data.x)
         n_graphs = int(torch.maximum(h_data.batch.max(), t_data.batch.max()).item()) + 1
 
-        h_local = self.local_inter(h_input, h_data.edge_index)
-        t_local = self.local_inter(t_input, t_data.edge_index)
+        edge_index = b_graph.edge_index
+        h_main = self.inter((t_input, h_input), edge_index[[1, 0]])
+        t_main = self.inter((h_input, t_input), edge_index)
 
         h_type = h_data.y if hasattr(h_data, 'y') else None
         t_type = t_data.y if hasattr(t_data, 'y') else None
@@ -177,8 +182,11 @@ class InterGraphAttention(nn.Module):
 
         h_virtual_message = virtual_message[:h_input.size(0)]
         t_virtual_message = virtual_message[h_input.size(0):]
-        h_x_inter = F.elu(h_local + h_virtual_message)
-        h_y_inter = F.elu(t_local + t_virtual_message)
+
+        h_aux_weight = torch.sigmoid(self.h_aux_gate(torch.cat([h_main, h_virtual_message], dim=-1)))
+        t_aux_weight = torch.sigmoid(self.t_aux_gate(torch.cat([t_main, t_virtual_message], dim=-1)))
+        h_x_inter = F.elu(h_main + h_aux_weight * h_virtual_message)
+        h_y_inter = F.elu(t_main + t_aux_weight * t_virtual_message)
         return h_x_inter,h_y_inter
 
 

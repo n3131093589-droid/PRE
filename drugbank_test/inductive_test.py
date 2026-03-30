@@ -13,6 +13,34 @@ from data_preprocessing import DrugDataset, DrugDataLoader
 import warnings
 warnings.filterwarnings('ignore', category=UserWarning)
 
+try:
+    from tqdm.auto import tqdm
+except ImportError:
+    tqdm = None
+
+
+ABLATION_MODE_NAMES = {
+    1: 'orig_only',
+    2: 'v_residual',
+    3: 'v_no_gate',
+    4: 'v_only',
+}
+
+
+def with_progress(iterable, desc):
+    if tqdm is None:
+        return iterable
+    total = len(iterable) if hasattr(iterable, '__len__') else None
+    return tqdm(iterable, total=total, desc=desc, leave=False, dynamic_ncols=True)
+
+
+def append_ablation_suffix(path, ablation_mode):
+    root, ext = os.path.splitext(path)
+    suffix = f'-ab{ablation_mode}'
+    if root.endswith(suffix):
+        return path
+    return f'{root}{suffix}{ext}'
+
 
 def build_parser():
     parser = argparse.ArgumentParser()
@@ -23,6 +51,7 @@ def build_parser():
     parser.add_argument('--fold', type=int, required=True, choices=[0, 1, 2, 2015])
     parser.add_argument('--pkl_name', type=str, required=True)
     parser.add_argument('--batch_size', type=int, default=1024, help='batch size')
+    parser.add_argument('--ablation_mode', type=int, default=2, choices=[1, 2, 3, 4], help='1=orig_only, 2=v_residual, 3=v_no_gate, 4=v_only')
     return parser
 
 
@@ -88,7 +117,7 @@ def test(s1_data_loader, s2_data_loader, model, device, curve_path):
     s2_probas_pred = []
     s2_ground_truth = []
     with torch.no_grad():
-        for batch in s1_data_loader:
+        for batch in with_progress(s1_data_loader, 'Test s1'):
             model.eval()
             _, _, probas_pred, ground_truth = do_compute(batch, device, model=model)
             s1_probas_pred.append(probas_pred)
@@ -98,7 +127,7 @@ def test(s1_data_loader, s2_data_loader, model, device, curve_path):
         s1_ground_truth = np.concatenate(s1_ground_truth)
         s1_acc, s1_auc_roc, s1_f1, s1_precision, s1_recall, s1_int_ap, s1_ap = do_compute_metrics(s1_probas_pred, s1_ground_truth)
 
-        for batch in s2_data_loader:
+        for batch in with_progress(s2_data_loader, 'Test s2'):
             model.eval()
             _, _, probas_pred, ground_truth = do_compute(batch, device, model=model)
             s2_probas_pred.append(probas_pred)
@@ -122,11 +151,14 @@ def test(s1_data_loader, s2_data_loader, model, device, curve_path):
 def main():
     seed_everything(42)
     args = build_parser().parse_args()
+    pkl_name = append_ablation_suffix(args.pkl_name, args.ablation_mode)
     use_cuda = torch.cuda.is_available() and args.use_cuda
     if use_cuda:
         torch.cuda.set_device(args.device)
     device = f'cuda:{args.device}' if use_cuda else 'cpu'
     print(args)
+    print(f"Ablation mode: {ABLATION_MODE_NAMES[args.ablation_mode]}")
+    print(f"Checkpoint path: {pkl_name}")
 
     df_ddi_s1 = pd.read_csv(f'drugbank_test/DrugBank/cold_start/fold{args.fold}/s1.csv')
     df_ddi_s2 = pd.read_csv(f'drugbank_test/DrugBank/cold_start/fold{args.fold}/s2.csv')
@@ -142,8 +174,8 @@ def main():
     s1_data_loader = DrugDataLoader(s1_data, batch_size=args.batch_size * 3, num_workers=2)
     s2_data_loader = DrugDataLoader(s2_data, batch_size=args.batch_size * 3, num_workers=2)
 
-    curve_path = os.path.join('curve', f'{os.path.basename(args.pkl_name)}.json')
-    test_model = torch.load(args.pkl_name, map_location=device).to(device)
+    curve_path = os.path.join('curve', f'{os.path.basename(pkl_name)}.json')
+    test_model = torch.load(pkl_name, map_location=device).to(device)
     test(s1_data_loader, s2_data_loader, test_model, device, curve_path)
 
 

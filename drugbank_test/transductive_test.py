@@ -1,4 +1,5 @@
 import argparse
+import os
 
 import torch
 from sklearn import metrics
@@ -10,6 +11,34 @@ from data_preprocessing import DrugDataset, DrugDataLoader
 import warnings
 warnings.filterwarnings('ignore', category=UserWarning)
 
+try:
+    from tqdm.auto import tqdm
+except ImportError:
+    tqdm = None
+
+
+ABLATION_MODE_NAMES = {
+    1: 'orig_only',
+    2: 'v_residual',
+    3: 'v_no_gate',
+    4: 'v_only',
+}
+
+
+def with_progress(iterable, desc):
+    if tqdm is None:
+        return iterable
+    total = len(iterable) if hasattr(iterable, '__len__') else None
+    return tqdm(iterable, total=total, desc=desc, leave=False, dynamic_ncols=True)
+
+
+def append_ablation_suffix(path, ablation_mode):
+    root, ext = os.path.splitext(path)
+    suffix = f'-ab{ablation_mode}'
+    if root.endswith(suffix):
+        return path
+    return f'{root}{suffix}{ext}'
+
 
 def build_parser():
     parser = argparse.ArgumentParser()
@@ -19,6 +48,7 @@ def build_parser():
     parser.set_defaults(use_cuda=True)
     parser.add_argument('--device', type=int, default=0, choices=[0, 1, 2])
     parser.add_argument('--fold', type=int, default=0, choices=[0, 1, 2])
+    parser.add_argument('--ablation_mode', type=int, default=2, choices=[1, 2, 3, 4], help='1=orig_only, 2=v_residual, 3=v_no_gate, 4=v_only')
     parser.add_argument('--pkl_name', type=str, default='drugbank_test/transductive_drugbank.pkl')
     return parser
 
@@ -59,7 +89,7 @@ def test(test_data_loader, model, device):
     test_probas_pred = []
     test_ground_truth = []
     with torch.no_grad():
-        for batch in test_data_loader:
+        for batch in with_progress(test_data_loader, 'Test'):
             model.eval()
             _, _, probas_pred, ground_truth = do_compute(batch, device, model)
             test_probas_pred.append(probas_pred)
@@ -76,8 +106,11 @@ def test(test_data_loader, model, device):
 
 def main():
     args = build_parser().parse_args()
+    pkl_name = append_ablation_suffix(args.pkl_name, args.ablation_mode)
     device = f'cuda:{args.device}' if torch.cuda.is_available() and args.use_cuda else 'cpu'
     print(args)
+    print(f"Ablation mode: {ABLATION_MODE_NAMES[args.ablation_mode]}")
+    print(f"Checkpoint path: {pkl_name}")
 
     df_ddi_test = pd.read_csv(f'drugbank_test/DrugBank/warm_start/fold{args.fold}/test.csv')
     test_tup = [(h, t, r) for h, t, r in zip(df_ddi_test['d1'], df_ddi_test['d2'], df_ddi_test['type'])]
@@ -86,7 +119,7 @@ def main():
     print(f"Testing with {len(test_data)} samples")
     test_data_loader = DrugDataLoader(test_data, batch_size=args.batch_size * 3, num_workers=2)
 
-    test_model = torch.load(args.pkl_name, map_location=device)
+    test_model = torch.load(pkl_name, map_location=device)
     test_model.to(device=device)
     test(test_data_loader, test_model, device)
 

@@ -25,18 +25,19 @@ def get_node(node_rep, batch, type, needed_type):
 
 
 class HDN_DDI(nn.Module):
-    def __init__(self, in_features, hidd_dim, kge_dim, rel_total, heads_out_feat_params, blocks_params):
+    def __init__(self, in_features, hidd_dim, kge_dim, rel_total, heads_out_feat_params, blocks_params, ablation_mode=2):
         super().__init__()
         self.in_features = in_features
         self.hidd_dim = hidd_dim
         self.rel_total = rel_total
         self.kge_dim = kge_dim
         self.n_blocks = len(blocks_params)
+        self.ablation_mode = ablation_mode
         
         self.initial_norm = LayerNorm(self.in_features)
         self.blocks = []
         for i, (head_out_feats, n_heads) in enumerate(zip(heads_out_feat_params, blocks_params)):
-            block = HDN_DDI_Block(n_heads, in_features, head_out_feats, final_out_feats=self.hidd_dim)
+            block = HDN_DDI_Block(n_heads, in_features, head_out_feats, final_out_feats=self.hidd_dim, ablation_mode=self.ablation_mode)
             self.add_module(f"block{i}", block)
             self.blocks.append(block)
             in_features = head_out_feats * n_heads
@@ -114,14 +115,14 @@ class HDN_DDI(nn.Module):
     
 #intra+inter
 class HDN_DDI_Block(nn.Module):
-    def __init__(self, n_heads, in_features, head_out_feats, final_out_feats):
+    def __init__(self, n_heads, in_features, head_out_feats, final_out_feats, ablation_mode=2):
         super().__init__()
         self.n_heads = n_heads
         self.in_features = in_features
         self.out_features = head_out_feats
 
         self.intraAtt = IntraGraphAttention(head_out_feats*n_heads)
-        self.interAtt = InterGraphAttention(head_out_feats*n_heads)
+        self.interAtt = InterGraphAttention(head_out_feats*n_heads, ablation_mode=ablation_mode)
         self.pool = GATConv(n_heads*head_out_feats, head_out_feats, n_heads)
         self.norm = LayerNorm(n_heads*head_out_feats)
         self.readout = SAGPooling(n_heads * head_out_feats, min_score=-1)

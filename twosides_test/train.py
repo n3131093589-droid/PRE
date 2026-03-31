@@ -206,6 +206,16 @@ def test(test_data_loader, model, device):
 
 def main():
     args = build_parser().parse_args()
+    n_atom_feats = args.n_atom_feats
+    n_atom_hid = args.n_atom_hid
+    rel_total = args.rel_total
+    lr = args.lr
+    n_epochs = args.n_epochs
+    kge_dim = args.kge_dim
+    batch_size = args.batch_size
+    weight_decay = args.weight_decay
+    neg_samples = args.neg_samples
+    data_size_ratio = args.data_size_ratio
     pkl_name = args.pkl_name.replace('.pkl', f'-fold{args.fold}.pkl')
     pkl_name = append_ablation_suffix(pkl_name, args.ablation_mode)
     use_cuda = torch.cuda.is_available() and args.use_cuda
@@ -227,23 +237,31 @@ def main():
     train_tup, val_tup = split_train_valid(train_tup, 2, val_ratio=0.25)
     test_tup = [(h, t, r, n) for h, t, r, n in zip(df_ddi_test['d1'], df_ddi_test['d2'], df_ddi_test['type'], df_ddi_test['Neg samples'])]
 
-    train_data = DrugDataset(train_tup, ratio=args.data_size_ratio, repeat_negatives=args.neg_samples)
-    val_data = DrugDataset(val_tup, ratio=args.data_size_ratio)
+    train_data = DrugDataset(train_tup, ratio=data_size_ratio, repeat_negatives=neg_samples)
+    val_data = DrugDataset(val_tup, ratio=data_size_ratio)
     test_data = DrugDataset(test_tup)
 
     print(f"Training with {len(train_data)} samples, validating with {len(val_data)}, and testing with {len(test_data)}")
 
-    train_data_loader = DrugDataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=2)
-    val_data_loader = DrugDataLoader(val_data, batch_size=args.batch_size * 3, num_workers=2)
-    test_data_loader = DrugDataLoader(test_data, batch_size=args.batch_size * 3, num_workers=2)
+    train_data_loader = DrugDataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=2)
+    val_data_loader = DrugDataLoader(val_data, batch_size=batch_size * 3, num_workers=2)
+    test_data_loader = DrugDataLoader(test_data, batch_size=batch_size * 3, num_workers=2)
 
-    model = models.HDN_DDI(in_features=66, hidd_dim=args.n_atom_hid, kge_dim=args.kge_dim, rel_total=args.rel_total, heads_out_feat_params=[64,64,64,64], blocks_params=[2, 2, 2, 2], ablation_mode=args.ablation_mode)
+    model = models.HDN_DDI(
+        in_features=n_atom_feats,
+        hidd_dim=n_atom_hid,
+        kge_dim=kge_dim,
+        rel_total=rel_total,
+        heads_out_feat_params=[64, 64, 64, 64],
+        blocks_params=[2, 2, 2, 2],
+        ablation_mode=args.ablation_mode,
+    )
     loss = custom_loss.SigmoidLoss()
-    optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = optim.lr_scheduler.LambdaLR(optimizer, lambda epoch: 0.96 ** epoch)
     model.to(device=device)
 
-    train(model, train_data_loader, val_data_loader, loss, optimizer, args.n_epochs, device, len(train_data), len(val_data), pkl_name, scheduler)
+    train(model, train_data_loader, val_data_loader, loss, optimizer, n_epochs, device, len(train_data), len(val_data), pkl_name, scheduler)
     test_model = torch.load(pkl_name, map_location=device)
     test(test_data_loader, test_model, device)
 

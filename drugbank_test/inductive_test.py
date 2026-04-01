@@ -26,6 +26,11 @@ ABLATION_MODE_NAMES = {
     4: 'v_only',
 }
 
+NODE_GATE_MODE_NAMES = {
+    0: 'off',
+    1: 'partner_substructure_gate',
+}
+
 
 def with_progress(iterable, desc):
     if tqdm is None:
@@ -34,9 +39,9 @@ def with_progress(iterable, desc):
     return tqdm(iterable, total=total, desc=desc, leave=False, dynamic_ncols=True)
 
 
-def append_ablation_suffix(path, ablation_mode):
+def append_experiment_suffix(path, ablation_mode, node_gate_mode):
     root, ext = os.path.splitext(path)
-    suffix = f'-ab{ablation_mode}'
+    suffix = f'-ab{ablation_mode}-ng{node_gate_mode}'
     if root.endswith(suffix):
         return path
     return f'{root}{suffix}{ext}'
@@ -52,6 +57,7 @@ def build_parser():
     parser.add_argument('--pkl_name', type=str, required=True)
     parser.add_argument('--batch_size', type=int, default=1024, help='batch size')
     parser.add_argument('--ablation_mode', type=int, default=2, choices=[1, 2, 3, 4], help='1=orig_only, 2=v_residual, 3=v_no_gate, 4=v_only')
+    parser.add_argument('--node_gate_mode', type=int, default=0, choices=[0, 1], help='0=off, 1=partner_substructure_gate')
     return parser
 
 
@@ -151,13 +157,14 @@ def test(s1_data_loader, s2_data_loader, model, device, curve_path):
 def main():
     seed_everything(42)
     args = build_parser().parse_args()
-    pkl_name = append_ablation_suffix(args.pkl_name, args.ablation_mode)
+    pkl_name = append_experiment_suffix(args.pkl_name, args.ablation_mode, args.node_gate_mode)
     use_cuda = torch.cuda.is_available() and args.use_cuda
     if use_cuda:
         torch.cuda.set_device(args.device)
     device = f'cuda:{args.device}' if use_cuda else 'cpu'
     print(args)
     print(f"Ablation mode: {ABLATION_MODE_NAMES[args.ablation_mode]}")
+    print(f"Node gate mode: {NODE_GATE_MODE_NAMES[args.node_gate_mode]}")
     print(f"Checkpoint path: {pkl_name}")
 
     df_ddi_s1 = pd.read_csv(f'drugbank_test/DrugBank/cold_start/fold{args.fold}/s1.csv')

@@ -11,6 +11,7 @@ from torch_geometric.nn import (
 
 from layers import (
                     CoAttentionLayer, 
+                    PairConditionedNodeGate,
                     RESCAL, 
                     IntraGraphAttention,
                     InterGraphAttention,
@@ -25,7 +26,7 @@ def get_node(node_rep, batch, type, needed_type):
 
 
 class HDN_DDI(nn.Module):
-    def __init__(self, in_features, hidd_dim, kge_dim, rel_total, heads_out_feat_params, blocks_params, ablation_mode=2):
+    def __init__(self, in_features, hidd_dim, kge_dim, rel_total, heads_out_feat_params, blocks_params, ablation_mode=2, node_gate_mode=0):
         super().__init__()
         self.in_features = in_features
         self.hidd_dim = hidd_dim
@@ -33,11 +34,12 @@ class HDN_DDI(nn.Module):
         self.kge_dim = kge_dim
         self.n_blocks = len(blocks_params)
         self.ablation_mode = ablation_mode
+        self.node_gate_mode = node_gate_mode
         
         self.initial_norm = LayerNorm(self.in_features)
         self.blocks = []
         for i, (head_out_feats, n_heads) in enumerate(zip(heads_out_feat_params, blocks_params)):
-            block = HDN_DDI_Block(n_heads, in_features, head_out_feats, final_out_feats=self.hidd_dim, ablation_mode=self.ablation_mode)
+            block = HDN_DDI_Block(n_heads, in_features, head_out_feats, final_out_feats=self.hidd_dim, ablation_mode=self.ablation_mode, node_gate_mode=self.node_gate_mode)
             self.add_module(f"block{i}", block)
             self.blocks.append(block)
             in_features = head_out_feats * n_heads
@@ -115,14 +117,16 @@ class HDN_DDI(nn.Module):
     
 #intra+inter
 class HDN_DDI_Block(nn.Module):
-    def __init__(self, n_heads, in_features, head_out_feats, final_out_feats, ablation_mode=2):
+    def __init__(self, n_heads, in_features, head_out_feats, final_out_feats, ablation_mode=2, node_gate_mode=0):
         super().__init__()
         self.n_heads = n_heads
         self.in_features = in_features
         self.out_features = head_out_feats
+        self.node_gate_mode = node_gate_mode
 
         self.intraAtt = IntraGraphAttention(head_out_feats*n_heads)
         self.interAtt = InterGraphAttention(head_out_feats*n_heads, ablation_mode=ablation_mode)
+        self.nodeGate = PairConditionedNodeGate(head_out_feats * n_heads) if self.node_gate_mode == 1 else None
         self.pool = GATConv(n_heads*head_out_feats, head_out_feats, n_heads)
         self.norm = LayerNorm(n_heads*head_out_feats)
         self.readout = SAGPooling(n_heads * head_out_feats, min_score=-1)
@@ -138,6 +142,16 @@ class HDN_DDI_Block(nn.Module):
         t_rep = torch.cat([t_intraRep,h_y_inter],1)
         h_data.x = F.elu(self.norm(h_rep, h_data.batch))
         t_data.x = F.elu(self.norm(t_rep, t_data.batch))
+
+        if self.nodeGate is not None:
+            h_data.x, t_data.x = self.nodeGate(
+                h_data.x,
+                h_data.batch,
+                getattr(h_data, 'y', None),
+                t_data.x,
+                t_data.batch,
+                getattr(t_data, 'y', None),
+            )
 
         h_data.x, h_weight = self.pool(h_data.x, h_data.edge_index, return_attention_weights=True)
         t_data.x, t_weight = self.pool(t_data.x, t_data.edge_index, return_attention_weights=True)

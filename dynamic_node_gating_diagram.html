@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Node Gating Diagram</title>
+    <style>
+        :root {
+            --bg: #f4efe6;
+            --panel: rgba(255, 252, 247, 0.92);
+            --ink: #1f2a2d;
+            --muted: #526067;
+            --accent: #c65d2e;
+            --accent-soft: #f4c58f;
+            --accent-deep: #7c2f17;
+            --line: #d8c7b3;
+            --mint: #98c1a3;
+            --sky: #8db8d6;
+            --gold: #e2b74a;
+            --shadow: 0 18px 50px rgba(52, 39, 27, 0.14);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", "PingFang SC", "Hiragino Sans GB", sans-serif;
+            color: var(--ink);
+            background:
+                radial-gradient(circle at top left, rgba(198, 93, 46, 0.14), transparent 28%),
+                radial-gradient(circle at bottom right, rgba(141, 184, 214, 0.18), transparent 24%),
+                linear-gradient(135deg, #f7f1e7 0%, #efe3d4 48%, #e8ddd2 100%);
+            min-height: 100vh;
+        }
+
+        .page {
+            max-width: 1220px;
+            margin: 0 auto;
+            padding: 32px 20px 48px;
+        }
+
+        .hero {
+            background: var(--panel);
+            border: 1px solid rgba(124, 47, 23, 0.12);
+            border-radius: 28px;
+            box-shadow: var(--shadow);
+            padding: 28px 28px 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        .eyebrow {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 999px;
+            background: rgba(198, 93, 46, 0.1);
+            color: var(--accent-deep);
+            font-size: 12px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        h1 {
+            margin: 14px 0 10px;
+            font-size: clamp(30px, 5vw, 56px);
+            line-height: 1.02;
+            letter-spacing: -0.04em;
+        }
+
+        .subtitle {
+            max-width: 840px;
+            margin: 0;
+            color: var(--muted);
+            font-size: 17px;
+            line-height: 1.7;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: minmax(0, 2.2fr) minmax(280px, 1fr);
+            gap: 22px;
+            margin-top: 22px;
+        }
+
+        .panel {
+            background: var(--panel);
+            border: 1px solid rgba(124, 47, 23, 0.12);
+            border-radius: 28px;
+            box-shadow: var(--shadow);
+            padding: 22px;
+        }
+
+        .panel h2 {
+            margin: 0 0 14px;
+            font-size: 20px;
+            letter-spacing: -0.02em;
+        }
+
+        .panel p {
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.7;
+        }
+
+        .legend {
+            display: grid;
+            gap: 12px;
+        }
+
+        .legend-item {
+            display: grid;
+            grid-template-columns: 18px 1fr;
+            gap: 10px;
+            align-items: start;
+            color: var(--muted);
+            line-height: 1.6;
+        }
+
+        .dot {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            margin-top: 3px;
+        }
+
+        .diagram-wrap {
+            overflow: auto;
+            padding-bottom: 6px;
+        }
+
+        svg {
+            width: 100%;
+            min-width: 780px;
+            height: auto;
+            display: block;
+        }
+
+        .note-box {
+            margin-top: 18px;
+            padding: 16px 18px;
+            border-radius: 18px;
+            background: linear-gradient(135deg, rgba(152, 193, 163, 0.18), rgba(141, 184, 214, 0.14));
+            border: 1px solid rgba(82, 96, 103, 0.16);
+            color: var(--ink);
+            line-height: 1.7;
+        }
+
+        .steps {
+            margin-top: 16px;
+            display: grid;
+            gap: 12px;
+        }
+
+        .step {
+            padding: 14px 16px;
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.65);
+            border: 1px solid rgba(124, 47, 23, 0.1);
+        }
+
+        .step strong {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 15px;
+        }
+
+        .step span {
+            color: var(--muted);
+            line-height: 1.6;
+            font-size: 14px;
+        }
+
+        @media (max-width: 980px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <section class="hero">
+            <div class="eyebrow">Substructure Extraction</div>
+            <h1>动态节点门控示意图</h1>
+            <p class="subtitle">
+                这个图展示的是：在子结构提取阶段，不直接固定所有子结构的重要性，而是利用对侧药物的上下文，
+                在后两层 block 中对当前药物的子结构节点进行条件化门控，再送入后续 pooling 和 pair scoring。
+            </p>
+        </section>
+
+        <div class="grid">
+            <section class="panel">
+                <h2>流程图</h2>
+                <div class="diagram-wrap">
+                    <svg viewBox="0 0 980 760" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="动态节点门控流程图">
+                        <defs>
+                            <linearGradient id="bgA" x1="0" y1="0" x2="1" y2="1">
+                                <stop offset="0%" stop-color="#fff6eb"/>
+                                <stop offset="100%" stop-color="#f6d8ba"/>
+                            </linearGradient>
+                            <linearGradient id="bgB" x1="0" y1="0" x2="1" y2="1">
+                                <stop offset="0%" stop-color="#eef7fc"/>
+                                <stop offset="100%" stop-color="#cfe3f1"/>
+                            </linearGradient>
+                            <linearGradient id="bgGate" x1="0" y1="0" x2="1" y2="1">
+                                <stop offset="0%" stop-color="#fff5cc"/>
+                                <stop offset="100%" stop-color="#e7bc43"/>
+                            </linearGradient>
+                            <linearGradient id="bgOut" x1="0" y1="0" x2="1" y2="1">
+                                <stop offset="0%" stop-color="#edf8f0"/>
+                                <stop offset="100%" stop-color="#bddbbf"/>
+                            </linearGradient>
+                            <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+                                <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#5b4638" flood-opacity="0.14"/>
+                            </filter>
+                            <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+                                <path d="M0,0 L10,5 L0,10 z" fill="#7c2f17"/>
+                            </marker>
+                            <marker id="arrowSoft" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+                                <path d="M0,0 L10,5 L0,10 z" fill="#526067"/>
+                            </marker>
+                        </defs>
+
+                        <rect x="30" y="36" width="400" height="150" rx="26" fill="url(#bgA)" stroke="#d48a54" stroke-width="2" filter="url(#shadow)"/>
+                        <text x="56" y="76" font-size="26" font-weight="700" fill="#7c2f17">Drug A</text>
+                        <text x="56" y="108" font-size="18" fill="#6b4b39">原子图 → 子结构节点提取</text>
+                        <text x="56" y="138" font-size="16" fill="#6b4b39">Block 1-2: 保持静态层级表征</text>
+                        <text x="56" y="164" font-size="16" fill="#6b4b39">得到 A 的子结构特征集合</text>
+                        <circle cx="310" cy="95" r="14" fill="#c65d2e"/>
+                        <circle cx="338" cy="125" r="12" fill="#e2b74a"/>
+                        <circle cx="282" cy="136" r="11" fill="#98c1a3"/>
+                        <circle cx="358" cy="92" r="10" fill="#8db8d6"/>
+                        <line x1="310" y1="95" x2="338" y2="125" stroke="#7c2f17" stroke-width="2"/>
+                        <line x1="310" y1="95" x2="282" y2="136" stroke="#7c2f17" stroke-width="2"/>
+                        <line x1="310" y1="95" x2="358" y2="92" stroke="#7c2f17" stroke-width="2"/>
+
+                        <rect x="550" y="36" width="400" height="150" rx="26" fill="url(#bgB)" stroke="#5d91b7" stroke-width="2" filter="url(#shadow)"/>
+                        <text x="576" y="76" font-size="26" font-weight="700" fill="#24516f">Drug B</text>
+                        <text x="576" y="108" font-size="18" fill="#35596d">原子图 → 子结构节点提取</text>
+                        <text x="576" y="138" font-size="16" fill="#35596d">汇总 partner substructure context</text>
+                        <text x="576" y="164" font-size="16" fill="#35596d">作为 A 的条件信号</text>
+                        <circle cx="832" cy="95" r="14" fill="#8db8d6"/>
+                        <circle cx="862" cy="128" r="12" fill="#98c1a3"/>
+                        <circle cx="806" cy="132" r="11" fill="#e2b74a"/>
+                        <circle cx="880" cy="92" r="10" fill="#c65d2e"/>
+                        <line x1="832" y1="95" x2="862" y2="128" stroke="#24516f" stroke-width="2"/>
+                        <line x1="832" y1="95" x2="806" y2="132" stroke="#24516f" stroke-width="2"/>
+                        <line x1="832" y1="95" x2="880" y2="92" stroke="#24516f" stroke-width="2"/>
+
+                        <path d="M430 111 C482 111, 500 111, 548 111" fill="none" stroke="#7c2f17" stroke-width="3" stroke-dasharray="9 8" marker-end="url(#arrow)"/>
+                        <text x="440" y="95" font-size="15" fill="#7c2f17">pair interaction</text>
+
+                        <rect x="180" y="258" width="620" height="248" rx="28" fill="url(#bgGate)" stroke="#9e7317" stroke-width="2" filter="url(#shadow)"/>
+                        <text x="214" y="302" font-size="30" font-weight="700" fill="#6f4c09">Dynamic Node Gating</text>
+                        <text x="214" y="336" font-size="18" fill="#745a26">只在后两层 block 作用</text>
+                        <text x="214" y="366" font-size="16" fill="#745a26">输入: 当前子结构节点表示 + 对侧药物子结构上下文</text>
+                        <text x="214" y="392" font-size="16" fill="#745a26">输出: 每个子结构节点的条件化 gate weight</text>
+
+                        <rect x="248" y="404" width="120" height="82" rx="18" fill="#fff8e0" stroke="#b88a1a"/>
+                        <text x="272" y="436" font-size="18" font-weight="700" fill="#7c2f17">Sub 1</text>
+                        <text x="265" y="464" font-size="15" fill="#6b4b39">gate = 1.24</text>
+
+                        <rect x="430" y="404" width="120" height="82" rx="18" fill="#fff8e0" stroke="#b88a1a"/>
+                        <text x="454" y="436" font-size="18" font-weight="700" fill="#7c2f17">Sub 2</text>
+                        <text x="447" y="464" font-size="15" fill="#6b4b39">gate = 0.81</text>
+
+                        <rect x="612" y="404" width="120" height="82" rx="18" fill="#fff8e0" stroke="#b88a1a"/>
+                        <text x="636" y="436" font-size="18" font-weight="700" fill="#7c2f17">Sub 3</text>
+                        <text x="629" y="464" font-size="15" fill="#6b4b39">gate = 1.37</text>
+
+                        <path d="M308 186 C308 220, 308 230, 308 258" fill="none" stroke="#7c2f17" stroke-width="3" marker-end="url(#arrow)"/>
+                        <path d="M752 186 C752 220, 698 240, 636 258" fill="none" stroke="#526067" stroke-width="3" marker-end="url(#arrowSoft)"/>
+                        <text x="706" y="224" font-size="15" fill="#526067">partner context</text>
+
+                        <rect x="76" y="548" width="828" height="174" rx="28" fill="url(#bgOut)" stroke="#6e9a77" stroke-width="2" filter="url(#shadow)"/>
+                        <text x="110" y="592" font-size="30" font-weight="700" fill="#284d30">后续输出</text>
+                        <text x="110" y="626" font-size="18" fill="#35583c">门控后的子结构节点 → pooling / graph-level readout → pair scoring</text>
+                        <text x="110" y="656" font-size="16" fill="#35583c">被放大的子结构更容易保留到高层表示，被抑制的子结构贡献变小</text>
+                        <text x="110" y="682" font-size="16" fill="#35583c">因此同一个 Drug A 在面对不同 partner drug 时，会激活不同的关键子结构</text>
+
+                        <path d="M490 506 C490 524, 490 532, 490 548" fill="none" stroke="#284d30" stroke-width="4" marker-end="url(#arrow)"/>
+                    </svg>
+                </div>
+
+                <div class="note-box">
+                    这张图对应当前 DrugBank 里的实现思路：前两层 block 保留相对稳定的底层局部结构表示，后两层再根据 partner drug 的子结构上下文进行软门控，避免过早扰动原子级和低层 motif 级信息。
+                </div>
+            </section>
+
+            <aside class="panel">
+                <h2>图例说明</h2>
+                <div class="legend">
+                    <div class="legend-item">
+                        <span class="dot" style="background:#c65d2e;"></span>
+                        <span>Drug A 侧的子结构节点与层级表示。</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="dot" style="background:#8db8d6;"></span>
+                        <span>Drug B 提供的 partner context，用来调节 Drug A 的子结构重要性。</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="dot" style="background:#e2b74a;"></span>
+                        <span>动态节点门控模块，根据当前 pair 产生不同 gate weight。</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="dot" style="background:#98c1a3;"></span>
+                        <span>门控后的子结构表示会进入 pooling 和最终打分。</span>
+                    </div>
+                </div>
+
+                <div class="steps">
+                    <div class="step">
+                        <strong>Step 1</strong>
+                        <span>先从单药分子图中提取原子与子结构节点，形成基础层级图。</span>
+                    </div>
+                    <div class="step">
+                        <strong>Step 2</strong>
+                        <span>用对侧药物的子结构摘要作为条件信号，生成当前配对下的门控权重。</span>
+                    </div>
+                    <div class="step">
+                        <strong>Step 3</strong>
+                        <span>只在后两层 block 中应用门控，让高层语义保持 pair-aware，低层局部结构保持稳定。</span>
+                    </div>
+                    <div class="step">
+                        <strong>Step 4</strong>
+                        <span>被激活的子结构在最终 graph-level 表示中占比更大，从而影响 DDI 预测结果。</span>
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </div>
+</body>
+</html>

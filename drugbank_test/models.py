@@ -35,11 +35,13 @@ class HDN_DDI(nn.Module):
         self.n_blocks = len(blocks_params)
         self.ablation_mode = ablation_mode
         self.node_gate_mode = node_gate_mode
+        self.node_gate_start = max(0, self.n_blocks - 2)
         
         self.initial_norm = LayerNorm(self.in_features)
         self.blocks = []
         for i, (head_out_feats, n_heads) in enumerate(zip(heads_out_feat_params, blocks_params)):
-            block = HDN_DDI_Block(n_heads, in_features, head_out_feats, final_out_feats=self.hidd_dim, ablation_mode=self.ablation_mode, node_gate_mode=self.node_gate_mode)
+            block_node_gate_mode = self.node_gate_mode if i >= self.node_gate_start else 0
+            block = HDN_DDI_Block(n_heads, in_features, head_out_feats, final_out_feats=self.hidd_dim, ablation_mode=self.ablation_mode, node_gate_mode=block_node_gate_mode)
             self.add_module(f"block{i}", block)
             self.blocks.append(block)
             in_features = head_out_feats * n_heads

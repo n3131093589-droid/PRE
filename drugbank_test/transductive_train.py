@@ -51,6 +51,13 @@ def append_experiment_suffix(path, ablation_mode, node_gate_mode):
     return f'{root}{suffix}{ext}'
 
 
+def load_checkpoint(path, device):
+    try:
+        return torch.load(path, map_location=device, weights_only=False)
+    except TypeError:
+        return torch.load(path, map_location=device)
+
+
 def build_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--n_atom_feats', type=int, default=66, help='num of input features')
@@ -256,7 +263,7 @@ def main():
     model.to(device=device)
 
     train(model, train_data_loader, val_data_loader, loss, optimizer, n_epochs, device, len(train_data), len(val_data), pkl_name, scheduler)
-    test_model = torch.load(pkl_name, map_location=device)
+    test_model = load_checkpoint(pkl_name, device)
     test(test_data_loader, test_model, device)
 
 

@@ -45,6 +45,13 @@ def append_experiment_suffix(path, ablation_mode, node_gate_mode):
     return f'{root}{suffix}{ext}'
 
 
+def load_checkpoint(path, device):
+    try:
+        return torch.load(path, map_location=device, weights_only=False)
+    except TypeError:
+        return torch.load(path, map_location=device)
+
+
 def build_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--batch_size', type=int, default=1024, help='batch size')
@@ -126,7 +133,7 @@ def main():
     print(f"Testing with {len(test_data)} samples")
     test_data_loader = DrugDataLoader(test_data, batch_size=args.batch_size * 3, num_workers=2)
 
-    test_model = torch.load(pkl_name, map_location=device)
+    test_model = load_checkpoint(pkl_name, device)
     test_model.to(device=device)
     test(test_data_loader, test_model, device)
 

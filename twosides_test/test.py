@@ -40,6 +40,13 @@ def append_ablation_suffix(path, ablation_mode):
     return f'{root}{suffix}{ext}'
 
 
+def load_checkpoint(path, device):
+    try:
+        return torch.load(path, map_location=device, weights_only=False)
+    except TypeError:
+        return torch.load(path, map_location=device)
+
+
 def build_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--use_cuda', action='store_true', help='enable CUDA if available')
@@ -146,7 +153,7 @@ def main():
     print(f"Testing on fold {args.fold}, Samples'num: {len(test_data)}")
     test_data_loader = DrugDataLoader(test_data, batch_size=batch_size * 3, num_workers=2)
 
-    test_model = torch.load(pkl_name, map_location=device).to(device)
+    test_model = load_checkpoint(pkl_name, device).to(device)
     test(test_data_loader, test_model, device)
 
 

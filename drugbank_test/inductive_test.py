@@ -47,6 +47,13 @@ def append_experiment_suffix(path, ablation_mode, node_gate_mode):
     return f'{root}{suffix}{ext}'
 
 
+def load_checkpoint(path, device):
+    try:
+        return torch.load(path, map_location=device, weights_only=False)
+    except TypeError:
+        return torch.load(path, map_location=device)
+
+
 def build_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--use_cuda', action='store_true', help='enable CUDA if available')
@@ -182,7 +189,7 @@ def main():
     s2_data_loader = DrugDataLoader(s2_data, batch_size=args.batch_size * 3, num_workers=2)
 
     curve_path = os.path.join('curve', f'{os.path.basename(pkl_name)}.json')
-    test_model = torch.load(pkl_name, map_location=device).to(device)
+    test_model = load_checkpoint(pkl_name, device).to(device)
     test(s1_data_loader, s2_data_loader, test_model, device, curve_path)
 
 

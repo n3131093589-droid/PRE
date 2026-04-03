@@ -40,6 +40,12 @@ def append_ablation_suffix(path, ablation_mode):
     return f'{root}{suffix}{ext}'
 
 
+def resolve_checkpoint_path(path, ablation_mode):
+    if path.endswith('.pkl') and os.path.exists(path):
+        return path
+    return append_ablation_suffix(path, ablation_mode)
+
+
 def load_checkpoint(path, device):
     try:
         return torch.load(path, map_location=device, weights_only=False)
@@ -136,7 +142,7 @@ def test(test_data_loader, model, device):
 
 def main():
     args = build_parser().parse_args()
-    pkl_name = append_ablation_suffix(args.pkl_name, args.ablation_mode)
+    pkl_name = resolve_checkpoint_path(args.pkl_name, args.ablation_mode)
     batch_size = args.batch_size
     use_cuda = torch.cuda.is_available() and args.use_cuda
     if use_cuda:

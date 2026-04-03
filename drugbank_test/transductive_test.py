@@ -45,6 +45,12 @@ def append_experiment_suffix(path, ablation_mode, node_gate_mode):
     return f'{root}{suffix}{ext}'
 
 
+def resolve_checkpoint_path(path, ablation_mode, node_gate_mode):
+    if path.endswith('.pkl') and os.path.exists(path):
+        return path
+    return append_experiment_suffix(path, ablation_mode, node_gate_mode)
+
+
 def load_checkpoint(path, device):
     try:
         return torch.load(path, map_location=device, weights_only=False)
@@ -119,7 +125,7 @@ def test(test_data_loader, model, device):
 
 def main():
     args = build_parser().parse_args()
-    pkl_name = append_experiment_suffix(args.pkl_name, args.ablation_mode, args.node_gate_mode)
+    pkl_name = resolve_checkpoint_path(args.pkl_name, args.ablation_mode, args.node_gate_mode)
     device = f'cuda:{args.device}' if torch.cuda.is_available() and args.use_cuda else 'cpu'
     print(args)
     print(f"Ablation mode: {ABLATION_MODE_NAMES[args.ablation_mode]}")

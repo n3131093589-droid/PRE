@@ -29,6 +29,7 @@ ABLATION_MODE_NAMES = {
 NODE_GATE_MODE_NAMES = {
     0: 'off',
     1: 'partner_substructure_gate',
+    2: 'partner_relation_gate',
 }
 
 
@@ -70,7 +71,7 @@ def build_parser():
     parser.add_argument('--pkl_name', type=str, required=True)
     parser.add_argument('--batch_size', type=int, default=1024, help='batch size')
     parser.add_argument('--ablation_mode', type=int, default=2, choices=[1, 2, 3, 4], help='1=orig_only, 2=v_residual, 3=v_no_gate, 4=v_only')
-    parser.add_argument('--node_gate_mode', type=int, default=0, choices=[0, 1], help='0=off, 1=partner_substructure_gate')
+    parser.add_argument('--node_gate_mode', type=int, default=0, choices=[0, 1, 2], help='0=off, 1=partner_substructure_gate, 2=partner_relation_gate')
     return parser
 
 

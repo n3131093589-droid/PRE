@@ -80,11 +80,13 @@ class IntraGraphAttention(nn.Module):
 
 
 class PairConditionedNodeGate(nn.Module):
-    def __init__(self, input_dim, target_type=1):
+    def __init__(self, input_dim, target_type=1, use_relation=False):
         super().__init__()
         self.input_dim = input_dim
         self.target_type = target_type
-        self.gate = nn.Linear(input_dim * 2, 1)
+        self.use_relation = use_relation
+        gate_input_dim = input_dim * 3 if self.use_relation else input_dim * 2
+        self.gate = nn.Linear(gate_input_dim, 1)
         nn.init.zeros_(self.gate.weight)
         nn.init.zeros_(self.gate.bias)
 
@@ -111,8 +113,11 @@ class PairConditionedNodeGate(nn.Module):
         target_counts.index_add_(0, target_batch, node_feature.new_ones((target_feature.size(0), 1)))
         return torch.where(target_counts > 0, target_mean, graph_mean)
 
-    def _apply_gate(self, node_feature, batch, node_type, partner_context):
-        gate_input = torch.cat([node_feature, partner_context[batch]], dim=-1)
+    def _apply_gate(self, node_feature, batch, node_type, partner_context, relation_context=None):
+        gate_inputs = [node_feature, partner_context[batch]]
+        if relation_context is not None:
+            gate_inputs.append(relation_context[batch])
+        gate_input = torch.cat(gate_inputs, dim=-1)
         gate_scale = 2.0 * torch.sigmoid(self.gate(gate_input))
         if node_type is None:
             return node_feature * gate_scale
@@ -125,12 +130,12 @@ class PairConditionedNodeGate(nn.Module):
         full_scale[target_mask] = gate_scale[target_mask]
         return node_feature * full_scale
 
-    def forward(self, h_feature, h_batch, h_type, t_feature, t_batch, t_type):
+    def forward(self, h_feature, h_batch, h_type, t_feature, t_batch, t_type, relation_context=None):
         n_graphs = int(torch.maximum(h_batch.max(), t_batch.max()).item()) + 1
         h_context = self._get_context(h_feature, h_batch, h_type, n_graphs)
         t_context = self._get_context(t_feature, t_batch, t_type, n_graphs)
-        h_feature = self._apply_gate(h_feature, h_batch, h_type, t_context)
-        t_feature = self._apply_gate(t_feature, t_batch, t_type, h_context)
+        h_feature = self._apply_gate(h_feature, h_batch, h_type, t_context, relation_context=relation_context)
+        t_feature = self._apply_gate(t_feature, t_batch, t_type, h_context, relation_context=relation_context)
         return h_feature, t_feature
 
 

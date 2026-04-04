@@ -8,13 +8,24 @@
 
 - `0`: 关闭动态节点门控，保持原始层级传播。
 - `1`: 打开 partner-aware 子结构门控，在所有 block 中对 `y == 1` 的子结构节点生效。
+- `2`: 打开 relation-aware 子结构门控，在所有 block 中对 `y == 1` 的子结构节点生效。
 
 门控是软门控，不改图拓扑，只对节点表示做条件缩放：
 
 - 每个药物先汇总本药的子结构上下文。
 - 对侧药物的上下文作为条件信号。
 - 每个子结构节点得到一个按 pair 动态变化的缩放系数。
+- `node_gate_mode = 2` 时，会额外拼接 relation embedding，让 gate 从 pair-aware 升级为 pair + relation aware。
 - 当前版本会在每个 block 中都施加门控，让 partner-aware 信号贯穿整个层级表示学习过程。
+
+## Recommended Next Comparison
+
+在当前结果里，建议先固定 `ablation_mode = 2`，只比较：
+
+- `ab2 ng1`: 当前最优的 partner-aware 动态节点门控
+- `ab2 ng2`: relation-aware 动态节点门控
+
+这样可以把新增收益归因到 relation context，而不是别的结构改动。
 
 ## Checkpoint Naming
 

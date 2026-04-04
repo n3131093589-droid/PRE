@@ -37,9 +37,20 @@ class HDN_DDI(nn.Module):
         self.node_gate_mode = node_gate_mode
         
         self.initial_norm = LayerNorm(self.in_features)
+        self.node_gate_rel_emb = nn.Embedding(self.rel_total, self.kge_dim) if self.node_gate_mode == 2 else None
+        if self.node_gate_rel_emb is not None:
+            nn.init.xavier_uniform_(self.node_gate_rel_emb.weight)
         self.blocks = []
         for i, (head_out_feats, n_heads) in enumerate(zip(heads_out_feat_params, blocks_params)):
-            block = HDN_DDI_Block(n_heads, in_features, head_out_feats, final_out_feats=self.hidd_dim, ablation_mode=self.ablation_mode, node_gate_mode=self.node_gate_mode)
+            block = HDN_DDI_Block(
+                n_heads,
+                in_features,
+                head_out_feats,
+                final_out_feats=self.hidd_dim,
+                ablation_mode=self.ablation_mode,
+                node_gate_mode=self.node_gate_mode,
+                relation_dim=self.kge_dim,
+            )
             self.add_module(f"block{i}", block)
             self.blocks.append(block)
             in_features = head_out_feats * n_heads
@@ -50,6 +61,7 @@ class HDN_DDI(nn.Module):
 
     def forward(self, triples):
         h_data, t_data, rels, b_graph = triples
+        relation_context = self.node_gate_rel_emb(rels.view(-1)) if self.node_gate_rel_emb is not None else None
 
         h_data.x = self.initial_norm(h_data.x, h_data.batch)
         t_data.x = self.initial_norm(t_data.x, t_data.batch)
@@ -59,7 +71,7 @@ class HDN_DDI(nn.Module):
         repr_t = []
 
         for i, block in enumerate(self.blocks):
-            out = block(h_data,t_data,b_graph)
+            out = block(h_data, t_data, b_graph, relation_context)
 
             h_data = out[0]
             t_data = out[1]
@@ -78,6 +90,7 @@ class HDN_DDI(nn.Module):
 
     def forward_with_weight(self, triples):
         h_data, t_data, rels, b_graph = triples
+        relation_context = self.node_gate_rel_emb(rels.view(-1)) if self.node_gate_rel_emb is not None else None
 
         h_data.x = self.initial_norm(h_data.x, h_data.batch)
         t_data.x = self.initial_norm(t_data.x, t_data.batch)
@@ -91,7 +104,7 @@ class HDN_DDI(nn.Module):
         ei_t = []
 
         for i, block in enumerate(self.blocks):
-            out = block(h_data,t_data,b_graph)
+            out = block(h_data, t_data, b_graph, relation_context)
 
             h_data = out[0]
             t_data = out[1]
@@ -117,7 +130,7 @@ class HDN_DDI(nn.Module):
     
 #intra+inter
 class HDN_DDI_Block(nn.Module):
-    def __init__(self, n_heads, in_features, head_out_feats, final_out_feats, ablation_mode=2, node_gate_mode=0):
+    def __init__(self, n_heads, in_features, head_out_feats, final_out_feats, ablation_mode=2, node_gate_mode=0, relation_dim=None):
         super().__init__()
         self.n_heads = n_heads
         self.in_features = in_features
@@ -126,12 +139,13 @@ class HDN_DDI_Block(nn.Module):
 
         self.intraAtt = IntraGraphAttention(head_out_feats*n_heads)
         self.interAtt = InterGraphAttention(head_out_feats*n_heads, ablation_mode=ablation_mode)
-        self.nodeGate = PairConditionedNodeGate(head_out_feats * n_heads) if self.node_gate_mode == 1 else None
+        self.nodeGate = PairConditionedNodeGate(head_out_feats * n_heads, use_relation=self.node_gate_mode == 2) if self.node_gate_mode in (1, 2) else None
+        self.nodeGateRelProj = nn.Linear(relation_dim, head_out_feats * n_heads, bias=False) if self.node_gate_mode == 2 and relation_dim is not None else None
         self.pool = GATConv(n_heads*head_out_feats, head_out_feats, n_heads)
         self.norm = LayerNorm(n_heads*head_out_feats)
         self.readout = SAGPooling(n_heads * head_out_feats, min_score=-1)
     
-    def forward(self, h_data,t_data,b_graph):
+    def forward(self, h_data, t_data, b_graph, relation_context=None):
    
         h_intraRep = self.intraAtt(h_data)
         t_intraRep = self.intraAtt(t_data)
@@ -144,6 +158,7 @@ class HDN_DDI_Block(nn.Module):
         t_data.x = F.elu(self.norm(t_rep, t_data.batch))
 
         if self.nodeGate is not None:
+            gate_relation_context = self.nodeGateRelProj(relation_context) if self.nodeGateRelProj is not None and relation_context is not None else None
             h_data.x, t_data.x = self.nodeGate(
                 h_data.x,
                 h_data.batch,
@@ -151,6 +166,7 @@ class HDN_DDI_Block(nn.Module):
                 t_data.x,
                 t_data.batch,
                 getattr(t_data, 'y', None),
+                relation_context=gate_relation_context,
             )
 
         h_data.x, h_weight = self.pool(h_data.x, h_data.edge_index, return_attention_weights=True)

@@ -25,8 +25,28 @@ def get_node(node_rep, batch, type, needed_type):
     return node_rep, batch
 
 
+class RelationAwareResidualUpdate(nn.Module):
+    def __init__(self, feature_dim, relation_dim):
+        super().__init__()
+        self.rel_proj = nn.Linear(relation_dim, feature_dim, bias=False)
+        self.residual = nn.Sequential(
+            nn.Linear(feature_dim * 2, feature_dim),
+            nn.ELU(),
+            nn.Linear(feature_dim, feature_dim),
+        )
+        nn.init.zeros_(self.residual[-1].weight)
+        nn.init.zeros_(self.residual[-1].bias)
+
+    def forward(self, fused_feature, batch, relation_context):
+        if relation_context is None:
+            return fused_feature
+        relation_feature = self.rel_proj(relation_context)[batch]
+        residual = self.residual(torch.cat([fused_feature, relation_feature], dim=-1))
+        return fused_feature + residual
+
+
 class HDN_DDI(nn.Module):
-    def __init__(self, in_features, hidd_dim, kge_dim, rel_total, heads_out_feat_params, blocks_params, ablation_mode=2, node_gate_mode=0):
+    def __init__(self, in_features, hidd_dim, kge_dim, rel_total, heads_out_feat_params, blocks_params, ablation_mode=2, node_gate_mode=0, update_mode=0):
         super().__init__()
         self.in_features = in_features
         self.hidd_dim = hidd_dim
@@ -35,11 +55,12 @@ class HDN_DDI(nn.Module):
         self.n_blocks = len(blocks_params)
         self.ablation_mode = ablation_mode
         self.node_gate_mode = node_gate_mode
+        self.update_mode = update_mode
         
         self.initial_norm = LayerNorm(self.in_features)
-        self.node_gate_rel_emb = nn.Embedding(self.rel_total, self.kge_dim) if self.node_gate_mode == 2 else None
-        if self.node_gate_rel_emb is not None:
-            nn.init.xavier_uniform_(self.node_gate_rel_emb.weight)
+        self.relation_context_emb = nn.Embedding(self.rel_total, self.kge_dim) if self.node_gate_mode == 2 or self.update_mode == 1 else None
+        if self.relation_context_emb is not None:
+            nn.init.xavier_uniform_(self.relation_context_emb.weight)
         self.blocks = []
         for i, (head_out_feats, n_heads) in enumerate(zip(heads_out_feat_params, blocks_params)):
             block = HDN_DDI_Block(
@@ -49,6 +70,7 @@ class HDN_DDI(nn.Module):
                 final_out_feats=self.hidd_dim,
                 ablation_mode=self.ablation_mode,
                 node_gate_mode=self.node_gate_mode,
+                update_mode=self.update_mode,
                 relation_dim=self.kge_dim,
             )
             self.add_module(f"block{i}", block)
@@ -61,7 +83,7 @@ class HDN_DDI(nn.Module):
 
     def forward(self, triples):
         h_data, t_data, rels, b_graph = triples
-        relation_context = self.node_gate_rel_emb(rels.view(-1)) if self.node_gate_rel_emb is not None else None
+        relation_context = self.relation_context_emb(rels.view(-1)) if self.relation_context_emb is not None else None
 
         h_data.x = self.initial_norm(h_data.x, h_data.batch)
         t_data.x = self.initial_norm(t_data.x, t_data.batch)
@@ -90,7 +112,7 @@ class HDN_DDI(nn.Module):
 
     def forward_with_weight(self, triples):
         h_data, t_data, rels, b_graph = triples
-        relation_context = self.node_gate_rel_emb(rels.view(-1)) if self.node_gate_rel_emb is not None else None
+        relation_context = self.relation_context_emb(rels.view(-1)) if self.relation_context_emb is not None else None
 
         h_data.x = self.initial_norm(h_data.x, h_data.batch)
         t_data.x = self.initial_norm(t_data.x, t_data.batch)
@@ -130,17 +152,21 @@ class HDN_DDI(nn.Module):
     
 #intra+inter
 class HDN_DDI_Block(nn.Module):
-    def __init__(self, n_heads, in_features, head_out_feats, final_out_feats, ablation_mode=2, node_gate_mode=0, relation_dim=None):
+    def __init__(self, n_heads, in_features, head_out_feats, final_out_feats, ablation_mode=2, node_gate_mode=0, update_mode=0, relation_dim=None):
         super().__init__()
         self.n_heads = n_heads
         self.in_features = in_features
         self.out_features = head_out_feats
         self.node_gate_mode = node_gate_mode
+        self.update_mode = update_mode
+        fusion_dim = n_heads * head_out_feats
 
         self.intraAtt = IntraGraphAttention(head_out_feats*n_heads)
         self.interAtt = InterGraphAttention(head_out_feats*n_heads, ablation_mode=ablation_mode)
         self.nodeGate = PairConditionedNodeGate(head_out_feats * n_heads, use_relation=self.node_gate_mode == 2) if self.node_gate_mode in (1, 2) else None
         self.nodeGateRelProj = nn.Linear(relation_dim, head_out_feats * n_heads, bias=False) if self.node_gate_mode == 2 and relation_dim is not None else None
+        self.hRelationUpdate = RelationAwareResidualUpdate(fusion_dim, relation_dim) if self.update_mode == 1 and relation_dim is not None else None
+        self.tRelationUpdate = RelationAwareResidualUpdate(fusion_dim, relation_dim) if self.update_mode == 1 and relation_dim is not None else None
         self.pool = GATConv(n_heads*head_out_feats, head_out_feats, n_heads)
         self.norm = LayerNorm(n_heads*head_out_feats)
         self.readout = SAGPooling(n_heads * head_out_feats, min_score=-1)
@@ -154,6 +180,9 @@ class HDN_DDI_Block(nn.Module):
         
         h_rep = torch.cat([h_intraRep,h_x_inter],1)
         t_rep = torch.cat([t_intraRep,h_y_inter],1)
+        if self.hRelationUpdate is not None and relation_context is not None:
+            h_rep = self.hRelationUpdate(h_rep, h_data.batch, relation_context)
+            t_rep = self.tRelationUpdate(t_rep, t_data.batch, relation_context)
         h_data.x = F.elu(self.norm(h_rep, h_data.batch))
         t_data.x = F.elu(self.norm(t_rep, t_data.batch))
 

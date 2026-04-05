@@ -27,6 +27,27 @@
 
 这样可以把新增收益归因到 relation context，而不是别的结构改动。
 
+## Update Layer Extension
+
+当前分支进一步新增了 `--update_mode`，用于控制 Update layer 是否采用“关系条件残差更新”：
+
+- `0`: 保持原始的 concat + norm 更新。
+- `1`: 打开 relation-aware residual update，在每个 block 中把 relation embedding 作为条件残差写回融合表示。
+
+这里不是 gate 版本，而是 residual 版本：
+
+- 先得到原始融合表示 `concat(intra_rep, inter_rep)`。
+- 再把 relation embedding 投影到 block hidden dim。
+- 用一个小 MLP 生成条件残差并加回融合表示。
+- 最后再做原有的 norm 和 pooling。
+
+建议实验时先固定之前各自最优的节点门控配置：
+
+- warm-start: 先比较 `ab2 ng2 um0` 对 `ab2 ng2 um1`
+- cold-start: 先比较 `ab2 ng1 um0` 对 `ab2 ng1 um1`
+
+这样可以把收益尽量归因到 Update layer 本身，而不是重新混入节点门控因素。
+
 ## Checkpoint Naming
 
 训练和测试脚本现在都会自动追加后缀：
@@ -37,6 +58,7 @@
 
 - `./pkl/db-subg-fold0-ab2-ng0.pkl`
 - `./pkl/db-subg-fold0-ab2-ng1.pkl`
+- `./pkl/db-subg-fold0-ab2-ng2-um1.pkl`
 
 ## Primary Matrix
 

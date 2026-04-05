@@ -30,6 +30,11 @@ NODE_GATE_MODE_NAMES = {
     2: 'partner_relation_gate',
 }
 
+UPDATE_MODE_NAMES = {
+    0: 'standard_concat_update',
+    1: 'relation_residual_update',
+}
+
 
 def with_progress(iterable, desc):
     if tqdm is None:
@@ -38,18 +43,20 @@ def with_progress(iterable, desc):
     return tqdm(iterable, total=total, desc=desc, leave=False, dynamic_ncols=True)
 
 
-def append_experiment_suffix(path, ablation_mode, node_gate_mode):
+def append_experiment_suffix(path, ablation_mode, node_gate_mode, update_mode):
     root, ext = os.path.splitext(path)
     suffix = f'-ab{ablation_mode}-ng{node_gate_mode}'
+    if update_mode != 0:
+        suffix += f'-um{update_mode}'
     if root.endswith(suffix):
         return path
     return f'{root}{suffix}{ext}'
 
 
-def resolve_checkpoint_path(path, ablation_mode, node_gate_mode):
+def resolve_checkpoint_path(path, ablation_mode, node_gate_mode, update_mode):
     if path.endswith('.pkl') and os.path.exists(path):
         return path
-    return append_experiment_suffix(path, ablation_mode, node_gate_mode)
+    return append_experiment_suffix(path, ablation_mode, node_gate_mode, update_mode)
 
 
 def load_checkpoint(path, device):
@@ -69,6 +76,7 @@ def build_parser():
     parser.add_argument('--fold', type=int, default=0, choices=[0, 1, 2])
     parser.add_argument('--ablation_mode', type=int, default=2, choices=[1, 2, 3, 4], help='1=orig_only, 2=v_residual, 3=v_no_gate, 4=v_only')
     parser.add_argument('--node_gate_mode', type=int, default=0, choices=[0, 1, 2], help='0=off, 1=partner_substructure_gate, 2=partner_relation_gate')
+    parser.add_argument('--update_mode', type=int, default=0, choices=[0, 1], help='0=standard_concat_update, 1=relation_residual_update')
     parser.add_argument('--pkl_name', type=str, default='drugbank_test/transductive_drugbank.pkl')
     return parser
 
@@ -126,11 +134,12 @@ def test(test_data_loader, model, device):
 
 def main():
     args = build_parser().parse_args()
-    pkl_name = resolve_checkpoint_path(args.pkl_name, args.ablation_mode, args.node_gate_mode)
+    pkl_name = resolve_checkpoint_path(args.pkl_name, args.ablation_mode, args.node_gate_mode, args.update_mode)
     device = f'cuda:{args.device}' if torch.cuda.is_available() and args.use_cuda else 'cpu'
     print(args)
     print(f"Ablation mode: {ABLATION_MODE_NAMES[args.ablation_mode]}")
     print(f"Node gate mode: {NODE_GATE_MODE_NAMES[args.node_gate_mode]}")
+    print(f"Update mode: {UPDATE_MODE_NAMES[args.update_mode]}")
     print(f"Checkpoint path: {pkl_name}")
 
     df_ddi_test = pd.read_csv(f'drugbank_test/DrugBank/warm_start/fold{args.fold}/test.csv')

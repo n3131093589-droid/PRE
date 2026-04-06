@@ -88,6 +88,66 @@ class IntraGraphAttention(nn.Module):
         return intra_rep
 
 
+class PairConditionedNodeGate(nn.Module):
+    def __init__(self, input_dim, target_type=1, use_relation=False):
+        super().__init__()
+        self.input_dim = input_dim
+        self.target_type = target_type
+        self.use_relation = use_relation
+        gate_input_dim = input_dim * 3 if self.use_relation else input_dim * 2
+        self.gate = nn.Linear(gate_input_dim, 1)
+        nn.init.zeros_(self.gate.weight)
+        nn.init.zeros_(self.gate.bias)
+
+    def _segment_mean(self, node_feature, batch, n_graphs):
+        pooled = node_feature.new_zeros((n_graphs, node_feature.size(-1)))
+        pooled.index_add_(0, batch, node_feature)
+        counts = node_feature.new_zeros((n_graphs, 1))
+        counts.index_add_(0, batch, node_feature.new_ones((node_feature.size(0), 1)))
+        return pooled / counts.clamp_min(1.0)
+
+    def _get_context(self, node_feature, batch, node_type, n_graphs):
+        graph_mean = self._segment_mean(node_feature, batch, n_graphs)
+        if node_type is None:
+            return graph_mean
+
+        target_mask = node_type == self.target_type
+        if not target_mask.any():
+            return graph_mean
+
+        target_feature = node_feature[target_mask]
+        target_batch = batch[target_mask]
+        target_mean = self._segment_mean(target_feature, target_batch, n_graphs)
+        target_counts = node_feature.new_zeros((n_graphs, 1))
+        target_counts.index_add_(0, target_batch, node_feature.new_ones((target_feature.size(0), 1)))
+        return torch.where(target_counts > 0, target_mean, graph_mean)
+
+    def _apply_gate(self, node_feature, batch, node_type, partner_context, relation_context=None):
+        gate_inputs = [node_feature, partner_context[batch]]
+        if relation_context is not None:
+            gate_inputs.append(relation_context[batch])
+        gate_input = torch.cat(gate_inputs, dim=-1)
+        gate_scale = 2.0 * torch.sigmoid(self.gate(gate_input))
+        if node_type is None:
+            return node_feature * gate_scale
+
+        target_mask = node_type == self.target_type
+        if not target_mask.any():
+            return node_feature
+
+        full_scale = torch.ones_like(gate_scale)
+        full_scale[target_mask] = gate_scale[target_mask]
+        return node_feature * full_scale
+
+    def forward(self, h_feature, h_batch, h_type, t_feature, t_batch, t_type, relation_context=None):
+        n_graphs = int(torch.maximum(h_batch.max(), t_batch.max()).item()) + 1
+        h_context = self._get_context(h_feature, h_batch, h_type, n_graphs)
+        t_context = self._get_context(t_feature, t_batch, t_type, n_graphs)
+        h_feature = self._apply_gate(h_feature, h_batch, h_type, t_context, relation_context=relation_context)
+        t_feature = self._apply_gate(t_feature, t_batch, t_type, h_context, relation_context=relation_context)
+        return h_feature, t_feature
+
+
 class InterGraphAttention(nn.Module):
     """包含单层GAT, 对两个药物的Bipartite Graph进行学习"""
 

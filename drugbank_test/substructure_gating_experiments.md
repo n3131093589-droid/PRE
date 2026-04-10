@@ -33,6 +33,7 @@
 
 - `0`: 保持原始的 concat + norm 更新。
 - `1`: 打开 relation-aware residual update，在每个 block 中把 relation embedding 作为条件残差写回融合表示。
+- `2`: 打开 relation-aware bidirectional residual update，先分别用 `intra + inter + e(r)` 和 `inter + intra + e(r)` 更新两路表示，再做原始融合。
 
 这里不是 gate 版本，而是 residual 版本：
 
@@ -41,10 +42,23 @@
 - 用一个小 MLP 生成条件残差并加回融合表示。
 - 最后再做原有的 norm 和 pooling。
 
+`update_mode = 2` 则更进一步：
+
+- 不再只对融合后表示做一次 residual 修正。
+- 而是先分别更新 `intra_rep` 和 `inter_rep`。
+- `intra_rep` 的修正由 `intra_rep + inter_rep + e(r)` 共同决定。
+- `inter_rep` 的修正由 `inter_rep + intra_rep + e(r)` 共同决定。
+- 两路都完成关系条件残差更新后，再拼接进入原有的 `norm + pooling`。
+
 建议实验时先固定之前各自最优的节点门控配置：
 
 - warm-start: 先比较 `ab2 ng2 um0` 对 `ab2 ng2 um1`
 - cold-start: 先比较 `ab2 ng1 um0` 对 `ab2 ng1 um1`
+
+如果 `um1` 已经证明有效，下一步建议直接比较：
+
+- warm-start: `ab2 ng2 um1` 对 `ab2 ng2 um2`
+- cold-start: `ab2 ng1 um1` 对 `ab2 ng1 um2`
 
 这样可以把收益尽量归因到 Update layer 本身，而不是重新混入节点门控因素。
 

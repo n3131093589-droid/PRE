@@ -39,6 +39,7 @@ NODE_GATE_MODE_NAMES = {
 UPDATE_MODE_NAMES = {
     0: 'standard_concat_update',
     1: 'relation_residual_update',
+    2: 'bidirectional_relation_residual_update',
 }
 
 
@@ -83,7 +84,7 @@ def build_parser():
     parser.add_argument('--fold', type=int, default=0, choices=[0, 1, 2, 2015])
     parser.add_argument('--ablation_mode', type=int, default=2, choices=[1, 2, 3, 4], help='1=orig_only, 2=v_residual, 3=v_no_gate, 4=v_only')
     parser.add_argument('--node_gate_mode', type=int, default=0, choices=[0, 1, 2], help='0=off, 1=partner_substructure_gate, 2=partner_relation_gate')
-    parser.add_argument('--update_mode', type=int, default=0, choices=[0, 1], help='0=standard_concat_update, 1=relation_residual_update')
+    parser.add_argument('--update_mode', type=int, default=0, choices=[0, 1, 2], help='0=standard_concat_update, 1=relation_residual_update, 2=bidirectional_relation_residual_update')
     parser.add_argument('--pkl_name', type=str, default=f'./pkl/db-{time.strftime("%m%d_%H%M")}.pkl')
     return parser
 

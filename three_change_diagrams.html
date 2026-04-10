@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three Change Diagrams</title>
+    <style>
+        :root {
+            --bg: #f5efe7;
+            --panel: rgba(255, 252, 247, 0.92);
+            --ink: #1f2a2d;
+            --muted: #55636a;
+            --line: #d5c5b4;
+            --warm: #d96c3f;
+            --warm-soft: #f6d4b5;
+            --blue: #6ea6cc;
+            --blue-soft: #d9ebf7;
+            --green: #79a978;
+            --green-soft: #dbeedc;
+            --gold: #d8a93d;
+            --gold-soft: #f7e6b6;
+            --shadow: 0 18px 42px rgba(46, 35, 24, 0.14);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: "Segoe UI", "PingFang SC", "Hiragino Sans GB", sans-serif;
+            color: var(--ink);
+            background:
+                radial-gradient(circle at top left, rgba(217, 108, 63, 0.16), transparent 24%),
+                radial-gradient(circle at bottom right, rgba(110, 166, 204, 0.18), transparent 22%),
+                linear-gradient(135deg, #f8f2e9 0%, #efe4d7 52%, #e8ddd1 100%);
+        }
+
+        .page {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 28px 20px 46px;
+        }
+
+        .hero {
+            background: var(--panel);
+            border: 1px solid rgba(85, 99, 106, 0.12);
+            border-radius: 28px;
+            box-shadow: var(--shadow);
+            padding: 26px 28px;
+            backdrop-filter: blur(10px);
+        }
+
+        .eyebrow {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 999px;
+            background: rgba(217, 108, 63, 0.1);
+            color: #8b3c1f;
+            font-size: 12px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        h1 {
+            margin: 14px 0 10px;
+            font-size: clamp(32px, 5vw, 56px);
+            line-height: 1.04;
+            letter-spacing: -0.04em;
+        }
+
+        .subtitle {
+            margin: 0;
+            max-width: 930px;
+            color: var(--muted);
+            font-size: 17px;
+            line-height: 1.72;
+        }
+
+        .cards {
+            display: grid;
+            gap: 22px;
+            margin-top: 22px;
+        }
+
+        .card {
+            background: var(--panel);
+            border: 1px solid rgba(85, 99, 106, 0.12);
+            border-radius: 28px;
+            box-shadow: var(--shadow);
+            padding: 22px;
+        }
+
+        .card-head {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 320px;
+            gap: 20px;
+            align-items: start;
+            margin-bottom: 18px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 6px 11px;
+            border-radius: 999px;
+            font-size: 12px;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+
+        .badge-v { background: rgba(217, 108, 63, 0.11); color: #8b3c1f; }
+        .badge-s { background: rgba(121, 169, 120, 0.14); color: #356537; }
+        .badge-u { background: rgba(110, 166, 204, 0.14); color: #2a5a78; }
+
+        .card h2 {
+            margin: 0 0 8px;
+            font-size: 28px;
+            letter-spacing: -0.03em;
+        }
+
+        .card p {
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.7;
+        }
+
+        .summary {
+            padding: 16px 18px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.72);
+            border: 1px solid rgba(85, 99, 106, 0.12);
+            color: var(--muted);
+            line-height: 1.65;
+        }
+
+        .summary strong {
+            display: block;
+            color: var(--ink);
+            margin-bottom: 6px;
+        }
+
+        .diagram {
+            overflow: auto;
+        }
+
+        svg {
+            width: 100%;
+            min-width: 940px;
+            height: auto;
+            display: block;
+        }
+
+        .footer-note {
+            margin-top: 18px;
+            padding: 15px 18px;
+            border-radius: 18px;
+            background: linear-gradient(135deg, rgba(255,255,255,0.68), rgba(246, 228, 208, 0.8));
+            border: 1px solid rgba(85, 99, 106, 0.12);
+            color: var(--muted);
+            line-height: 1.7;
+        }
+
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+            margin-top: 14px;
+        }
+
+        .detail-box {
+            padding: 14px 15px;
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.74);
+            border: 1px solid rgba(85, 99, 106, 0.12);
+        }
+
+        .detail-box strong {
+            display: block;
+            margin-bottom: 6px;
+            color: var(--ink);
+            font-size: 14px;
+        }
+
+        .detail-box span {
+            display: block;
+            color: var(--muted);
+            font-size: 14px;
+            line-height: 1.65;
+        }
+
+        @media (max-width: 980px) {
+            .card-head {
+                grid-template-columns: 1fr;
+            }
+
+            .detail-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <section class="hero">
+            <div class="eyebrow">Model Changes</div>
+            <h1>V、Substructure-Extraction、Update Layer 三处改动示意图</h1>
+            <p class="subtitle">
+                这三张图分别回答三个问题：V 分支是怎么增强交互表示的，substructure-extraction 是怎么动态挑重点子结构的，
+                update layer 又是怎么把交互信息真正写回主干层级表示的。目标是打开后一眼能看明白“信息从哪来、经过什么处理、最后写到哪里”。
+            </p>
+        </section>
+
+        <section class="cards">
+            <article class="card">
+                <div class="card-head">
+                    <div>
+                        <div class="badge badge-v">Change 1</div>
+                        <h2>V Branch</h2>
+                        <p>
+                            原来只有普通的 pair-wise inter-graph interaction。现在多加一个虚拟交互节点 V，
+                            先从两侧节点汇总 pair-level interaction，再把这份更抽象的交互信息回传给节点表示。
+                        </p>
+                    </div>
+                    <div class="summary">
+                        <strong>一句话理解</strong>
+                        原来是“节点和节点直接交互”，现在变成“先形成一个 pair-level 交互中枢 V，再由 V 反哺节点交互表示”。
+                    </div>
+                </div>
+                <div class="diagram">
+                    <svg viewBox="0 0 1120 410" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="V branch diagram">
+                        <defs>
+                            <marker id="arrowA" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+                                <path d="M0,0 L10,5 L0,10 z" fill="#8b3c1f"/>
+                            </marker>
+                            <filter id="shadowA" x="-20%" y="-20%" width="140%" height="140%">
+                                <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#5d4635" flood-opacity="0.14"/>
+                            </filter>
+                        </defs>
+
+                        <rect x="40" y="74" width="250" height="240" rx="26" fill="#f7dcc7" stroke="#d96c3f" stroke-width="2" filter="url(#shadowA)"/>
+                        <text x="68" y="116" font-size="28" font-weight="700" fill="#8b3c1f">Drug A</text>
+                        <text x="68" y="150" font-size="18" fill="#7b5b4a">node features</text>
+                        <circle cx="118" cy="204" r="18" fill="#d96c3f"/>
+                        <circle cx="170" cy="168" r="16" fill="#d8a93d"/>
+                        <circle cx="172" cy="238" r="16" fill="#79a978"/>
+                        <circle cx="232" cy="206" r="16" fill="#6ea6cc"/>
+                        <line x1="118" y1="204" x2="170" y2="168" stroke="#8b3c1f" stroke-width="2"/>
+                        <line x1="118" y1="204" x2="172" y2="238" stroke="#8b3c1f" stroke-width="2"/>
+                        <line x1="170" y1="168" x2="232" y2="206" stroke="#8b3c1f" stroke-width="2"/>
+                        <line x1="172" y1="238" x2="232" y2="206" stroke="#8b3c1f" stroke-width="2"/>
+
+                        <rect x="830" y="74" width="250" height="240" rx="26" fill="#dfeef8" stroke="#6ea6cc" stroke-width="2" filter="url(#shadowA)"/>
+                        <text x="858" y="116" font-size="28" font-weight="700" fill="#2a5a78">Drug B</text>
+                        <text x="858" y="150" font-size="18" fill="#4b6877">node features</text>
+                        <circle cx="906" cy="204" r="18" fill="#6ea6cc"/>
+                        <circle cx="958" cy="168" r="16" fill="#79a978"/>
+                        <circle cx="960" cy="238" r="16" fill="#d8a93d"/>
+                        <circle cx="1020" cy="206" r="16" fill="#d96c3f"/>
+                        <line x1="906" y1="204" x2="958" y2="168" stroke="#2a5a78" stroke-width="2"/>
+                        <line x1="906" y1="204" x2="960" y2="238" stroke="#2a5a78" stroke-width="2"/>
+                        <line x1="958" y1="168" x2="1020" y2="206" stroke="#2a5a78" stroke-width="2"/>
+                        <line x1="960" y1="238" x2="1020" y2="206" stroke="#2a5a78" stroke-width="2"/>
+
+                        <rect x="365" y="104" width="390" height="92" rx="22" fill="#fff7dc" stroke="#d8a93d" stroke-width="2" filter="url(#shadowA)"/>
+                        <text x="395" y="144" font-size="25" font-weight="700" fill="#7d6118">Ordinary Inter-Graph Interaction</text>
+                        <text x="395" y="173" font-size="17" fill="#7a6640">A nodes <-> B nodes directly exchange pair signals</text>
+
+                        <circle cx="560" cy="272" r="56" fill="#f0d2f6" stroke="#8d58a2" stroke-width="3" filter="url(#shadowA)"/>
+                        <text x="540" y="266" font-size="34" font-weight="800" fill="#69347d">V</text>
+                        <text x="495" y="298" font-size="17" fill="#69347d">virtual interaction hub</text>
+
+                        <path d="M290 197 C336 197, 344 146, 365 146" fill="none" stroke="#8b3c1f" stroke-width="3" marker-end="url(#arrowA)"/>
+                        <path d="M755 146 C780 146, 786 197, 830 197" fill="none" stroke="#2a5a78" stroke-width="3" marker-end="url(#arrowA)"/>
+
+                        <path d="M290 232 C382 250, 430 262, 501 270" fill="none" stroke="#8b3c1f" stroke-width="3" stroke-dasharray="10 8" marker-end="url(#arrowA)"/>
+                        <path d="M830 232 C738 250, 690 262, 619 270" fill="none" stroke="#2a5a78" stroke-width="3" stroke-dasharray="10 8" marker-end="url(#arrowA)"/>
+                        <text x="372" y="247" font-size="15" fill="#8b3c1f">collect pair context</text>
+                        <text x="676" y="247" font-size="15" fill="#2a5a78">collect pair context</text>
+
+                        <path d="M510 318 C458 348, 368 350, 286 288" fill="none" stroke="#8d58a2" stroke-width="3" marker-end="url(#arrowA)"/>
+                        <path d="M610 318 C662 348, 752 350, 834 288" fill="none" stroke="#8d58a2" stroke-width="3" marker-end="url(#arrowA)"/>
+                        <text x="360" y="360" font-size="16" fill="#69347d">V sends enriched interaction message back</text>
+                    </svg>
+                </div>
+                <div class="footer-note">重点不是单纯多了一个节点，而是多了一个“先汇总 pair 级交互，再反向写回”的中间步骤，所以交互表示比原始 inter branch 更完整。</div>
+                <div class="detail-grid">
+                    <div class="detail-box">
+                        <strong>V 是什么</strong>
+                        <span>V 不是数据里真实存在的节点，也不是某个药物自己的节点。它是对“当前这一对药物”的交互状态临时建立的一个虚拟节点。</span>
+                    </div>
+                    <div class="detail-box">
+                        <strong>它聚合什么</strong>
+                        <span>它聚合的是 A 与 B 所有候选交互节点之间的 pair-level 信息，所以它更像“这对药当前的交互摘要”。</span>
+                    </div>
+                    <div class="detail-box">
+                        <strong>它回写什么</strong>
+                        <span>V 再把这份 pair-level 交互摘要回写给两侧节点，帮助节点表示不只看局部邻接，还能看全局 pair 交互上下文。</span>
+                    </div>
+                </div>
+            </article>
+
+            <article class="card">
+                <div class="card-head">
+                    <div>
+                        <div class="badge badge-s">Change 2</div>
+                        <h2>Substructure-Extraction</h2>
+                        <p>
+                            原来子结构节点的重要性基本是固定往后传。现在会根据对侧药物，甚至根据关系类型，
+                            给当前药物的子结构节点一个动态权重，让“当前这对药真正相关的子结构”更突出。
+                        </p>
+                    </div>
+                    <div class="summary">
+                        <strong>一句话理解</strong>
+                        原来是“所有候选子结构按固定方式传播”，现在是“先看对面是谁，再决定本侧哪些子结构要被放大”。
+                    </div>
+                </div>
+                <div class="diagram">
+                    <svg viewBox="0 0 1120 420" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Substructure extraction diagram">
+                        <defs>
+                            <marker id="arrowB" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+                                <path d="M0,0 L10,5 L0,10 z" fill="#356537"/>
+                            </marker>
+                            <filter id="shadowB" x="-20%" y="-20%" width="140%" height="140%">
+                                <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#4b5a44" flood-opacity="0.14"/>
+                            </filter>
+                        </defs>
+
+                        <rect x="38" y="74" width="292" height="258" rx="26" fill="#dbeedc" stroke="#79a978" stroke-width="2" filter="url(#shadowB)"/>
+                        <text x="66" y="116" font-size="28" font-weight="700" fill="#356537">Drug A substructures</text>
+                        <text x="66" y="148" font-size="18" fill="#4f6a4e">candidate substructure nodes</text>
+
+                        <circle cx="108" cy="214" r="18" fill="#79a978"/>
+                        <circle cx="168" cy="184" r="18" fill="#79a978"/>
+                        <circle cx="230" cy="214" r="18" fill="#79a978"/>
+                        <circle cx="142" cy="266" r="18" fill="#79a978"/>
+                        <circle cx="212" cy="274" r="18" fill="#79a978"/>
+                        <line x1="108" y1="214" x2="168" y2="184" stroke="#356537" stroke-width="2"/>
+                        <line x1="168" y1="184" x2="230" y2="214" stroke="#356537" stroke-width="2"/>
+                        <line x1="108" y1="214" x2="142" y2="266" stroke="#356537" stroke-width="2"/>
+                        <line x1="230" y1="214" x2="212" y2="274" stroke="#356537" stroke-width="2"/>
+                        <line x1="142" y1="266" x2="212" y2="274" stroke="#356537" stroke-width="2"/>
+
+                        <rect x="404" y="96" width="318" height="92" rx="22" fill="#fff7dc" stroke="#d8a93d" stroke-width="2" filter="url(#shadowB)"/>
+                        <text x="438" y="136" font-size="24" font-weight="700" fill="#7d6118">Partner / Relation Context</text>
+                        <text x="438" y="166" font-size="17" fill="#6c6448">summary from Drug B (+ relation type if ng2)</text>
+
+                        <rect x="404" y="226" width="318" height="94" rx="22" fill="#eef8ef" stroke="#79a978" stroke-width="2" filter="url(#shadowB)"/>
+                        <text x="454" y="264" font-size="25" font-weight="700" fill="#356537">Node Gate</text>
+                        <text x="440" y="292" font-size="17" fill="#4f6a4e">compute dynamic weight for each</text>
+                        <text x="494" y="314" font-size="17" fill="#4f6a4e">substructure node</text>
+
+                        <rect x="794" y="74" width="288" height="258" rx="26" fill="#f7e6b6" stroke="#d8a93d" stroke-width="2" filter="url(#shadowB)"/>
+                        <text x="822" y="116" font-size="28" font-weight="700" fill="#7d6118">Weighted substructures</text>
+                        <text x="822" y="148" font-size="18" fill="#7a6640">important nodes become stronger</text>
+                        <circle cx="870" cy="214" r="15" fill="#79a978" opacity="0.45"/>
+                        <circle cx="932" cy="184" r="28" fill="#79a978"/>
+                        <circle cx="1000" cy="214" r="19" fill="#79a978" opacity="0.62"/>
+                        <circle cx="900" cy="270" r="24" fill="#79a978"/>
+                        <circle cx="986" cy="274" r="13" fill="#79a978" opacity="0.35"/>
+                        <line x1="870" y1="214" x2="932" y2="184" stroke="#7d6118" stroke-width="2"/>
+                        <line x1="932" y1="184" x2="1000" y2="214" stroke="#7d6118" stroke-width="2"/>
+                        <line x1="870" y1="214" x2="900" y2="270" stroke="#7d6118" stroke-width="2"/>
+                        <line x1="1000" y1="214" x2="986" y2="274" stroke="#7d6118" stroke-width="2"/>
+                        <line x1="900" y1="270" x2="986" y2="274" stroke="#7d6118" stroke-width="2"/>
+
+                        <path d="M330 204 C364 204, 380 252, 404 252" fill="none" stroke="#356537" stroke-width="3" marker-end="url(#arrowB)"/>
+                        <text x="336" y="192" font-size="15" fill="#356537">substructure nodes</text>
+                        <path d="M722 142 C772 142, 774 206, 794 206" fill="none" stroke="#7d6118" stroke-width="3" marker-end="url(#arrowB)"/>
+                        <path d="M722 272 C770 272, 774 234, 794 234" fill="none" stroke="#356537" stroke-width="3" marker-end="url(#arrowB)"/>
+                        <text x="735" y="132" font-size="15" fill="#7d6118">conditioning signal</text>
+                        <text x="740" y="298" font-size="15" fill="#356537">weighted nodes continue downstream</text>
+                    </svg>
+                </div>
+                <div class="footer-note">这里没有重建新图，也不是硬删除节点，而是对已有候选子结构做动态强调，所以改动成本小，但表达能力更强。</div>
+                <div class="detail-grid">
+                    <div class="detail-box">
+                        <strong>子结构是什么</strong>
+                        <span>这里的子结构不是在线重新做化学子图挖掘，而是数据预处理后已经存在于层级图里的子结构节点，也就是 y = 1 的那类节点。</span>
+                    </div>
+                    <div class="detail-box">
+                        <strong>门控看什么</strong>
+                        <span>ng1 时只看对侧药物摘要；ng2 时除了对侧药物摘要，还会把当前样本的关系标签对应的 relation embedding 一起作为条件输入。</span>
+                    </div>
+                    <div class="detail-box">
+                        <strong>最终效果</strong>
+                        <span>同一个药物在不同搭配对象、不同关系类型下，被强调的子结构可以不同，所以它是“条件化子结构加权”，不是固定加权。</span>
+                    </div>
+                </div>
+            </article>
+
+            <article class="card">
+                <div class="card-head">
+                    <div>
+                        <div class="badge badge-u">Change 3</div>
+                        <h2>Update Layer</h2>
+                        <p>
+                            原来 update 基本是把层级表示和交互表示拼起来再更新。现在多了一步：先拿当前样本的关系标签 r 对应的 embedding，
+                            生成一个关系条件残差，再把这份“关系定制修正”写回融合表示里。
+                        </p>
+                    </div>
+                    <div class="summary">
+                        <strong>一句话理解</strong>
+                        原来是“直接拼起来更新”，现在是“先拼起来，再按当前 relation type 补一个修正项，再更新”。
+                    </div>
+                </div>
+                <div class="diagram">
+                    <svg viewBox="0 0 1120 420" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Update layer diagram">
+                        <defs>
+                            <marker id="arrowC" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+                                <path d="M0,0 L10,5 L0,10 z" fill="#2a5a78"/>
+                            </marker>
+                            <filter id="shadowC" x="-20%" y="-20%" width="140%" height="140%">
+                                <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#374751" flood-opacity="0.14"/>
+                            </filter>
+                        </defs>
+
+                        <rect x="40" y="88" width="230" height="96" rx="22" fill="#dbeedc" stroke="#79a978" stroke-width="2" filter="url(#shadowC)"/>
+                        <text x="74" y="128" font-size="25" font-weight="700" fill="#356537">Intra rep</text>
+                        <text x="74" y="157" font-size="17" fill="#4f6a4e">hierarchical structure signal</text>
+
+                        <rect x="40" y="236" width="230" height="96" rx="22" fill="#dfeef8" stroke="#6ea6cc" stroke-width="2" filter="url(#shadowC)"/>
+                        <text x="74" y="276" font-size="25" font-weight="700" fill="#2a5a78">Inter rep</text>
+                        <text x="74" y="305" font-size="17" fill="#4b6877">interaction branch signal</text>
+
+                        <rect x="346" y="154" width="260" height="114" rx="24" fill="#fff7dc" stroke="#d8a93d" stroke-width="2" filter="url(#shadowC)"/>
+                        <text x="388" y="198" font-size="28" font-weight="700" fill="#7d6118">Concat Fusion</text>
+                        <text x="390" y="230" font-size="17" fill="#7a6640">[intra_rep ; inter_rep]</text>
+                        <text x="376" y="254" font-size="17" fill="#7a6640">base fused representation</text>
+
+                        <rect x="650" y="58" width="270" height="102" rx="20" fill="#f3dff7" stroke="#8d58a2" stroke-width="2" filter="url(#shadowC)"/>
+                        <text x="682" y="98" font-size="22" font-weight="700" fill="#69347d">Relation embedding</text>
+                        <text x="692" y="124" font-size="17" fill="#69347d">e(r), where r = interaction type</text>
+                        <text x="682" y="146" font-size="15" fill="#69347d">DrugBank: DDI type, Twosides: event type</text>
+
+                        <rect x="664" y="184" width="242" height="120" rx="24" fill="#edf7ff" stroke="#6ea6cc" stroke-width="2" filter="url(#shadowC)"/>
+                        <text x="754" y="228" font-size="28" font-weight="700" fill="#2a5a78">MLP</text>
+                        <text x="688" y="258" font-size="17" fill="#4b6877">generate relation-aware residual</text>
+                        <text x="696" y="281" font-size="17" fill="#4b6877">for the current block update</text>
+
+                        <circle cx="956" cy="242" r="42" fill="#f6d4b5" stroke="#d96c3f" stroke-width="3" filter="url(#shadowC)"/>
+                        <text x="942" y="249" font-size="30" font-weight="800" fill="#8b3c1f">+</text>
+
+                        <rect x="1018" y="154" width="70" height="176" rx="18" fill="#d9ebf7" stroke="#6ea6cc" stroke-width="2" filter="url(#shadowC)"/>
+                        <text x="1034" y="192" font-size="24" font-weight="700" fill="#2a5a78">LN</text>
+                        <text x="1030" y="226" font-size="16" fill="#4b6877">ELU</text>
+                        <text x="1024" y="284" font-size="16" fill="#4b6877">updated</text>
+                        <text x="1027" y="308" font-size="16" fill="#4b6877">main</text>
+                        <text x="1028" y="332" font-size="16" fill="#4b6877">branch</text>
+
+                        <path d="M270 136 C312 136, 320 188, 346 188" fill="none" stroke="#356537" stroke-width="3" marker-end="url(#arrowC)"/>
+                        <path d="M270 284 C312 284, 320 238, 346 238" fill="none" stroke="#2a5a78" stroke-width="3" marker-end="url(#arrowC)"/>
+                        <path d="M606 212 C638 212, 648 212, 664 212" fill="none" stroke="#7d6118" stroke-width="3" marker-end="url(#arrowC)"/>
+                        <path d="M785 160 C785 170, 785 170, 785 184" fill="none" stroke="#69347d" stroke-width="3" marker-end="url(#arrowC)"/>
+                        <path d="M906 244 C930 244, 930 244, 914 244" fill="none" stroke="#2a5a78" stroke-width="3" marker-end="url(#arrowC)"/>
+                        <path d="M998 242 C1008 242, 1010 242, 1018 242" fill="none" stroke="#8b3c1f" stroke-width="3" marker-end="url(#arrowC)"/>
+
+                        <text x="620" y="196" font-size="15" fill="#7d6118">base fused feature</text>
+                        <text x="898" y="216" font-size="15" fill="#2a5a78">residual</text>
+                        <text x="900" y="234" font-size="15" fill="#2a5a78">added</text>
+                    </svg>
+                </div>
+                <div class="footer-note">这不是 gate 版 update。它不是决定“开关多少”，而是根据关系类型额外生成一段修正信息，再把它加回融合表示里。</div>
+                <div class="detail-grid">
+                    <div class="detail-box">
+                        <strong>这里的关系 r 是什么</strong>
+                        <span>r 不是抽象语义描述，而是当前训练样本里的 `type` 标签。DrugBank 中它表示 DDI 类型；Twosides 中它表示副作用 / event 类型。</span>
+                    </div>
+                    <div class="detail-box">
+                        <strong>为什么要提前用 r</strong>
+                        <span>原模型里关系信息主要在最后 decoder 才参与打分。现在把 r 提前放进 update，目的是让主干表示在更新时就带上“这个关系要看什么”的偏好。</span>
+                    </div>
+                    <div class="detail-box">
+                        <strong>残差在补什么</strong>
+                        <span>它补的是“当前关系类型下，这份融合表示还缺什么修正”。所以它不是简单缩放已有信息，而是往里加一段关系定制信息。</span>
+                    </div>
+                </div>
+            </article>
+        </section>
+    </div>
+</body>
+</html>

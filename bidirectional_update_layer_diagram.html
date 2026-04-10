@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bidirectional Update Layer Diagram</title>
+    <style>
+        :root {
+            --bg: #f6efe7;
+            --panel: rgba(255, 252, 247, 0.93);
+            --ink: #1f2a2d;
+            --muted: #5a676e;
+            --warm: #cf6c42;
+            --warm-soft: #f4d5c1;
+            --blue: #6d9fc4;
+            --blue-soft: #dbe9f5;
+            --green: #77a473;
+            --green-soft: #dbead8;
+            --violet: #8a61a9;
+            --violet-soft: #eadcf4;
+            --gold: #d6a33c;
+            --gold-soft: #f6e5ba;
+            --shadow: 0 18px 44px rgba(48, 36, 23, 0.14);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: "Segoe UI", "PingFang SC", "Hiragino Sans GB", sans-serif;
+            color: var(--ink);
+            background:
+                radial-gradient(circle at top left, rgba(207, 108, 66, 0.14), transparent 24%),
+                radial-gradient(circle at bottom right, rgba(109, 159, 196, 0.18), transparent 22%),
+                linear-gradient(135deg, #faf4eb 0%, #efe3d5 54%, #e9ddd1 100%);
+        }
+
+        .page {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 28px 20px 46px;
+        }
+
+        .hero {
+            background: var(--panel);
+            border: 1px solid rgba(90, 103, 110, 0.12);
+            border-radius: 28px;
+            box-shadow: var(--shadow);
+            padding: 26px 28px;
+        }
+
+        .eyebrow {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 999px;
+            background: rgba(138, 97, 169, 0.1);
+            color: #694582;
+            font-size: 12px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        h1 {
+            margin: 14px 0 10px;
+            font-size: clamp(32px, 5vw, 54px);
+            line-height: 1.04;
+            letter-spacing: -0.04em;
+        }
+
+        .subtitle {
+            margin: 0;
+            max-width: 930px;
+            color: var(--muted);
+            font-size: 17px;
+            line-height: 1.72;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: minmax(0, 2.1fr) 340px;
+            gap: 22px;
+            margin-top: 22px;
+        }
+
+        .panel {
+            background: var(--panel);
+            border: 1px solid rgba(90, 103, 110, 0.12);
+            border-radius: 28px;
+            box-shadow: var(--shadow);
+            padding: 22px;
+        }
+
+        .panel h2 {
+            margin: 0 0 14px;
+            font-size: 22px;
+            letter-spacing: -0.02em;
+        }
+
+        .panel p {
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.7;
+        }
+
+        .diagram-wrap {
+            overflow: auto;
+        }
+
+        svg {
+            width: 100%;
+            min-width: 980px;
+            height: auto;
+            display: block;
+        }
+
+        .stack {
+            display: grid;
+            gap: 12px;
+        }
+
+        .note {
+            padding: 15px 16px;
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.76);
+            border: 1px solid rgba(90, 103, 110, 0.12);
+            color: var(--muted);
+            line-height: 1.65;
+        }
+
+        .note strong {
+            display: block;
+            color: var(--ink);
+            margin-bottom: 6px;
+        }
+
+        @media (max-width: 980px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <section class="hero">
+            <div class="eyebrow">Update Layer Idea</div>
+            <h1>关系感知双向残差更新 示意图</h1>
+            <p class="subtitle">
+                这张图画的是在当前 update layer 基础上继续扩展的一种更强版本：不再只是把 relation-aware residual
+                加到融合表示上，而是先让 intra 分支和 inter 分支在关系条件下互相改写，再把它们融合成最终的 block 输出。
+            </p>
+        </section>
+
+        <div class="grid">
+            <section class="panel">
+                <h2>流程图</h2>
+                <div class="diagram-wrap">
+                    <svg viewBox="0 0 1180 620" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Bidirectional update layer diagram">
+                        <defs>
+                            <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+                                <path d="M0,0 L10,5 L0,10 z" fill="#694582"/>
+                            </marker>
+                            <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+                                <path d="M0,0 L10,5 L0,10 z" fill="#2f5d79"/>
+                            </marker>
+                            <marker id="arrowWarm" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+                                <path d="M0,0 L10,5 L0,10 z" fill="#8a3f22"/>
+                            </marker>
+                            <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+                                <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#544336" flood-opacity="0.14"/>
+                            </filter>
+                        </defs>
+
+                        <rect x="40" y="74" width="248" height="104" rx="22" fill="#dbead8" stroke="#77a473" stroke-width="2" filter="url(#shadow)"/>
+                        <text x="76" y="116" font-size="28" font-weight="700" fill="#355f33">Intra rep</text>
+                        <text x="76" y="146" font-size="17" fill="#4f6b4d">current hierarchical signal</text>
+
+                        <rect x="40" y="248" width="248" height="104" rx="22" fill="#dbe9f5" stroke="#6d9fc4" stroke-width="2" filter="url(#shadow)"/>
+                        <text x="76" y="290" font-size="28" font-weight="700" fill="#2f5d79">Inter rep</text>
+                        <text x="76" y="320" font-size="17" fill="#4b6677">current interaction signal</text>
+
+                        <rect x="384" y="38" width="248" height="92" rx="20" fill="#eadcf4" stroke="#8a61a9" stroke-width="2" filter="url(#shadow)"/>
+                        <text x="420" y="78" font-size="24" font-weight="700" fill="#694582">Relation embedding</text>
+                        <text x="430" y="106" font-size="16" fill="#694582">e(r), r = current type label</text>
+
+                        <rect x="384" y="170" width="300" height="130" rx="24" fill="#f6d4c3" stroke="#cf6c42" stroke-width="2" filter="url(#shadow)"/>
+                        <text x="426" y="214" font-size="27" font-weight="700" fill="#8a3f22">Residual Update A</text>
+                        <text x="434" y="244" font-size="17" fill="#7c5545">update intra by using</text>
+                        <text x="430" y="268" font-size="17" fill="#7c5545">intra + inter + e(r)</text>
+                        <text x="430" y="292" font-size="16" fill="#7c5545">h_intra' = h_intra + f(h_intra, h_inter, e(r))</text>
+
+                        <rect x="384" y="346" width="300" height="130" rx="24" fill="#dbe9f5" stroke="#6d9fc4" stroke-width="2" filter="url(#shadow)"/>
+                        <text x="426" y="390" font-size="27" font-weight="700" fill="#2f5d79">Residual Update B</text>
+                        <text x="434" y="420" font-size="17" fill="#536b78">update inter by using</text>
+                        <text x="430" y="444" font-size="17" fill="#536b78">inter + intra + e(r)</text>
+                        <text x="430" y="468" font-size="16" fill="#536b78">h_inter' = h_inter + g(h_inter, h_intra, e(r))</text>
+
+                        <rect x="760" y="206" width="224" height="116" rx="24" fill="#f7e6ba" stroke="#d6a33c" stroke-width="2" filter="url(#shadow)"/>
+                        <text x="806" y="248" font-size="28" font-weight="700" fill="#7a5c1d">Fusion</text>
+                        <text x="798" y="278" font-size="17" fill="#6e6143">concat [h_intra' ; h_inter']</text>
+                        <text x="793" y="302" font-size="16" fill="#6e6143">optional fused residual with e(r)</text>
+
+                        <rect x="1044" y="194" width="88" height="140" rx="18" fill="#dbe9f5" stroke="#6d9fc4" stroke-width="2" filter="url(#shadow)"/>
+                        <text x="1064" y="234" font-size="25" font-weight="700" fill="#2f5d79">LN</text>
+                        <text x="1060" y="262" font-size="17" fill="#4b6677">ELU</text>
+                        <text x="1056" y="304" font-size="16" fill="#4b6677">pool /</text>
+                        <text x="1052" y="326" font-size="16" fill="#4b6677">readout</text>
+
+                        <path d="M288 126 C338 126, 350 208, 384 208" fill="none" stroke="#355f33" stroke-width="3" marker-end="url(#arrowWarm)"/>
+                        <path d="M288 300 C338 300, 350 258, 384 258" fill="none" stroke="#2f5d79" stroke-width="3" marker-end="url(#arrowWarm)"/>
+                        <path d="M288 126 C340 126, 350 384, 384 384" fill="none" stroke="#355f33" stroke-width="3" stroke-dasharray="9 8" marker-end="url(#arrowBlue)"/>
+                        <path d="M288 300 C338 300, 350 432, 384 432" fill="none" stroke="#2f5d79" stroke-width="3" stroke-dasharray="9 8" marker-end="url(#arrowBlue)"/>
+
+                        <path d="M508 130 C508 148, 508 148, 508 170" fill="none" stroke="#694582" stroke-width="3" marker-end="url(#arrow)"/>
+                        <path d="M558 130 C558 148, 558 148, 558 346" fill="none" stroke="#694582" stroke-width="3" marker-end="url(#arrow)"/>
+
+                        <path d="M684 236 C724 236, 730 236, 760 236" fill="none" stroke="#8a3f22" stroke-width="3" marker-end="url(#arrowWarm)"/>
+                        <path d="M684 412 C724 412, 730 292, 760 292" fill="none" stroke="#2f5d79" stroke-width="3" marker-end="url(#arrowBlue)"/>
+
+                        <path d="M984 264 C1014 264, 1016 264, 1044 264" fill="none" stroke="#694582" stroke-width="3" marker-end="url(#arrow)"/>
+
+                        <text x="306" y="160" font-size="15" fill="#7b5a48">direct update path</text>
+                        <text x="302" y="356" font-size="15" fill="#5d7180">cross-view update path</text>
+                        <text x="716" y="176" font-size="15" fill="#694582">two updated views enter fusion</text>
+                    </svg>
+                </div>
+            </section>
+
+            <aside class="panel">
+                <h2>读图说明</h2>
+                <div class="stack">
+                    <div class="note">
+                        <strong>它比当前 um1 多了什么</strong>
+                        当前 um1 主要是对融合后的表示加一个 relation-aware residual。这个想法更进一步，先分别更新 intra 和 inter 两路表示，再融合。
+                    </div>
+                    <div class="note">
+                        <strong>为什么叫双向</strong>
+                        因为不是单向把 inter 写回 intra，或者只把 intra 写回 inter，而是两边都在关系条件下互相改写。
+                    </div>
+                    <div class="note">
+                        <strong>这里的关系 r 是什么</strong>
+                        还是当前样本里的 type 标签。DrugBank 里是 DDI 类型，Twosides 里是 event / side-effect 类型。
+                    </div>
+                    <div class="note">
+                        <strong>为什么不是门控</strong>
+                        这里仍然是 residual update，不是 sigmoid gate。它做的是“补一段关系条件修正”，不是“给已有表示乘系数”。
+                    </div>
+                    <div class="note">
+                        <strong>最小实验写法</strong>
+                        可以把当前 update_mode=1 视为 um1，把这个新想法记为 um2。这样对照就会很清晰：um0 -> um1 -> um2。
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </div>
+</body>
+</html>

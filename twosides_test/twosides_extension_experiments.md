@@ -22,6 +22,7 @@
 
 - `0`: 保持原始 concat + norm 更新。
 - `1`: 打开 relation-aware residual update，在每个 block 中对融合表示加入关系条件残差。
+- `2`: 打开 relation-aware bidirectional residual update，先分别更新 intra 和 inter 两路表示，再进入原始融合。
 
 这里的 update 不是 gate，而是 residual：
 
@@ -29,6 +30,14 @@
 - 再把 relation embedding 投影到当前 block hidden dim。
 - 用小 MLP 生成条件残差并加回融合表示。
 - 最后进入原有 norm 和 pooling。
+
+`update_mode = 2` 会更进一步：
+
+- 不再只对融合后的表示做一次残差修正。
+- 而是先分别更新 `intra_rep` 和 `inter_rep`。
+- `intra_rep` 的修正由 `intra_rep + inter_rep + e(r)` 决定。
+- `inter_rep` 的修正由 `inter_rep + intra_rep + e(r)` 决定。
+- 两路更新完成后，再拼接进入原有的 `norm + pooling`。
 
 ## Checkpoint Naming
 
@@ -52,18 +61,21 @@ Twosides 保持和旧实验兼容：
 1. `ab2` 对 `ab2 ng1`
 2. `ab2 ng1` 对 `ab2 ng2`
 3. `ab2 ng1` 对 `ab2 ng1 um1`
+4. `ab2 ng1 um1` 对 `ab2 ng1 um2`
 
 如果想先最省实验数，优先跑：
 
 1. `ab2 ng1`
 2. `ab2 ng2`
 3. `ab2 ng1 um1`
+4. `ab2 ng1 um2`
 
 这样可以分别判断：
 
 - partner-aware 子结构门控是否有效
 - relation-aware 门控是否比 partner-aware 更强
 - relation-aware residual update 是否能继续带来增益
+- 双向关系残差更新是否能继续超过 um1
 
 ## Command Templates
 
@@ -75,7 +87,7 @@ python twosides_test/train.py \
   --device 0 \
   --ablation_mode 2 \
   --node_gate_mode 1 \
-  --update_mode 1 \
+  --update_mode 2 \
   --pkl_name ./pkl/ts-exp.pkl
 ```
 
@@ -87,6 +99,6 @@ python twosides_test/test.py \
   --device 0 \
   --ablation_mode 2 \
   --node_gate_mode 1 \
-  --update_mode 1 \
+  --update_mode 2 \
   --pkl_name ./pkl/ts-exp.pkl
 ```

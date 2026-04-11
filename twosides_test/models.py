@@ -41,6 +41,34 @@ class RelationAwareResidualUpdate(nn.Module):
         residual = self.residual(torch.cat([fused_feature, relation_feature], dim=-1))
         return fused_feature + residual
 
+
+class BidirectionalRelationAwareResidualUpdate(nn.Module):
+    def __init__(self, feature_dim, relation_dim):
+        super().__init__()
+        self.rel_proj = nn.Linear(relation_dim, feature_dim, bias=False)
+        self.intra_residual = nn.Sequential(
+            nn.Linear(feature_dim * 3, feature_dim),
+            nn.ELU(),
+            nn.Linear(feature_dim, feature_dim),
+        )
+        self.inter_residual = nn.Sequential(
+            nn.Linear(feature_dim * 3, feature_dim),
+            nn.ELU(),
+            nn.Linear(feature_dim, feature_dim),
+        )
+        nn.init.zeros_(self.intra_residual[-1].weight)
+        nn.init.zeros_(self.intra_residual[-1].bias)
+        nn.init.zeros_(self.inter_residual[-1].weight)
+        nn.init.zeros_(self.inter_residual[-1].bias)
+
+    def forward(self, intra_feature, inter_feature, batch, relation_context):
+        if relation_context is None:
+            return intra_feature, inter_feature
+        relation_feature = self.rel_proj(relation_context)[batch]
+        intra_residual = self.intra_residual(torch.cat([intra_feature, inter_feature, relation_feature], dim=-1))
+        inter_residual = self.inter_residual(torch.cat([inter_feature, intra_feature, relation_feature], dim=-1))
+        return intra_feature + intra_residual, inter_feature + inter_residual
+
 class HDN_DDI(nn.Module):
     def __init__(self, in_features, hidd_dim, kge_dim, rel_total, heads_out_feat_params, blocks_params, ablation_mode=2, node_gate_mode=0, update_mode=0):
         super().__init__()
@@ -54,7 +82,7 @@ class HDN_DDI(nn.Module):
         self.update_mode = update_mode
         
         self.initial_norm = LayerNorm(self.in_features)
-        self.relation_context_emb = nn.Embedding(self.rel_total, self.kge_dim) if self.node_gate_mode == 2 or self.update_mode == 1 else None
+        self.relation_context_emb = nn.Embedding(self.rel_total, self.kge_dim) if self.node_gate_mode == 2 or self.update_mode in (1, 2) else None
         if self.relation_context_emb is not None:
             nn.init.xavier_uniform_(self.relation_context_emb.weight)
         self.blocks = []
@@ -115,6 +143,7 @@ class HDN_DDI_Block(nn.Module):
         self.node_gate_mode = node_gate_mode
         self.update_mode = update_mode
         fusion_dim = n_heads * head_out_feats
+        branch_dim = fusion_dim // 2
 
         self.intraAtt = IntraGraphAttention(head_out_feats*n_heads)
         self.interAtt = InterGraphAttention(head_out_feats*n_heads, ablation_mode=ablation_mode)
@@ -122,6 +151,8 @@ class HDN_DDI_Block(nn.Module):
         self.nodeGateRelProj = nn.Linear(relation_dim, head_out_feats * n_heads, bias=False) if self.node_gate_mode == 2 and relation_dim is not None else None
         self.hRelationUpdate = RelationAwareResidualUpdate(fusion_dim, relation_dim) if self.update_mode == 1 and relation_dim is not None else None
         self.tRelationUpdate = RelationAwareResidualUpdate(fusion_dim, relation_dim) if self.update_mode == 1 and relation_dim is not None else None
+        self.hBidirectionalRelationUpdate = BidirectionalRelationAwareResidualUpdate(branch_dim, relation_dim) if self.update_mode == 2 and relation_dim is not None else None
+        self.tBidirectionalRelationUpdate = BidirectionalRelationAwareResidualUpdate(branch_dim, relation_dim) if self.update_mode == 2 and relation_dim is not None else None
         self.pool = GATConv(n_heads*head_out_feats, head_out_feats, n_heads)
         self.norm = LayerNorm(n_heads*head_out_feats)
     
@@ -131,6 +162,9 @@ class HDN_DDI_Block(nn.Module):
         t_intraRep = self.intraAtt(t_data)
         
         h_x_inter,h_y_inter = self.interAtt(h_data,t_data,b_graph)
+        if self.hBidirectionalRelationUpdate is not None and relation_context is not None:
+            h_intraRep, h_x_inter = self.hBidirectionalRelationUpdate(h_intraRep, h_x_inter, h_data.batch, relation_context)
+            t_intraRep, h_y_inter = self.tBidirectionalRelationUpdate(t_intraRep, h_y_inter, t_data.batch, relation_context)
         
         h_rep = torch.cat([h_intraRep,h_x_inter],1)
         t_rep = torch.cat([t_intraRep,h_y_inter],1)
